@@ -1,0 +1,1494 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Card Combat</title>
+    <style>
+      :root {
+        --cabinet-height: 8vh; /* 8% of viewport height */
+        --cards-height: 30vh; /* default cards height on mobile */
+        --safe: env(safe-area-inset-bottom, 0px);
+        --bg: radial-gradient(1200px 800px at 50% 10%, #0f172a 0%, #020617 45%, #000000 100%);
+        --accent: #ef4444; /* red */
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+      }
+      html, body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        touch-action: manipulation; /* reduce mobile click delay and ghost scrolling */
+        color: var(--text);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        font-size: 1.5rem; /* reduce global fonts by ~25% from previous */
+        display: grid;
+        grid-template-rows: auto 1fr var(--cabinet-height);
+        grid-template-columns: 100%;
+      }
+      /* Top progress bar */
+      header.progress-wrap {
+        display: grid;
+        place-items: center;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        position: relative; /* allow overlay positioning */
+      }
+      .progress-outer {
+        position: relative;
+        display: block;
+        width: 90%;
+        max-width: 500px;
+        margin: 0 auto; /* center horizontally */
+      }
+      .progress {
+        position: relative;
+        width: calc(100% - 36px); /* reserve space for badge */
+        margin-left: 36px;
+        height: 32px; /* doubled height */
+        border-radius: 999px;
+        background: rgba(148,163,184,0.25);
+        overflow: hidden;
+      }
+      /* Level badge to the left of the bar */
+      #levelBadge {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #0f172a;
+        background: radial-gradient(circle at 35% 35%, #c7d2fe 0%, #93c5fd 55%, #60a5fa 100%);
+        border: 2px solid rgba(255,255,255,0.65);
+        box-shadow: 0 4px 10px rgba(2,6,23,0.35);
+        pointer-events: none;
+      }
+      .progress .fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 0%;
+        background: linear-gradient(90deg, #22c55e, #16a34a);
+        transition: width 300ms ease; /* animate progress change for visibility */
+      }
+      .progress .label {
+        position: absolute;
+        left: 0; right: 0; top: 50%; transform: translateY(-50%);
+        text-align: center;
+        font-size: 0.81rem; /* 10% smaller */
+        color: #064e3b; /* dark green */
+        font-weight: 800;
+        mix-blend-mode: screen;
+      }
+      /* Jackpot overlay under the progress bar without affecting layout */
+      #jackpot {
+        position: absolute;
+        top: 44px; /* progress height (32) + header padding (~12) */
+        left: 50%;
+        transform: translateX(-50%);
+        pointer-events: none;
+        font-weight: 800;
+        color: #facc15;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      }
+      #game {
+        position: relative;
+        overflow: hidden;
+      }
+      /* Monster area: fills the space between the top (below progress bar) and the character band */
+      #monsterArea {
+        position: absolute;
+        left: 0; right: 0;
+        top: 0;
+        bottom: calc(var(--cabinet-height) + var(--cards-height) + 10vh); /* leave room for cards + character band */
+        display: grid;
+        place-items: center;
+        z-index: 0; /* under character and effects */
+        pointer-events: auto; /* allow overlay button interactions */
+      }
+      #monsterArea img {
+        max-width: min(90%, 520px);
+        max-height: 90%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 24px rgba(0,0,0,0.5));
+        pointer-events: none; /* image itself not clickable */
+      }
+      /* Recycle overlay button */
+      #recycleBtn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: rgba(2,6,23,0.7);
+        color: #e5e7eb;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        z-index: 2;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+      }
+      #recycleBtn:active { transform: translateY(1px); }
+      #recycleBtn svg { width: 22px; height: 22px; opacity: 0.9; }
+      /* Character area (10% height) above the cards */
+      #characterArea {
+        position: absolute;
+        left: 0; right: 0;
+        bottom: calc(var(--cabinet-height) + var(--cards-height));
+        height: 10vh;
+        pointer-events: auto;
+        background: rgba(2, 6, 23, 0.66);
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        box-shadow: inset 0 -6px 12px rgba(0,0,0,0.25), inset 0 6px 12px rgba(0,0,0,0.15);
+        z-index: 1;
+      }
+      /* Generic player unit container */
+      .playerUnit {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        bottom: 4px; /* sit near bottom of the band */
+        transform: translateX(-50%);
+      }
+      /* Maintain existing id for local player */
+      #player { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; bottom: 4px; transform: translateX(-50%); }
+      #playerRect {
+        width: 20px; /* fixed player width */
+        height: 60px; /* fixed player height */
+        background: #38bdf8; /* sky blue */
+        border: 2px solid rgba(255,255,255,0.65);
+        border-radius: 4px;
+        box-shadow: 0 4px 8px rgba(2,6,23,0.35);
+      }
+      .playerRect { width: 20px; height: 60px; background: #64748b; border: 2px solid rgba(255,255,255,0.65); border-radius: 4px; box-shadow: 0 4px 8px rgba(2,6,23,0.35); }
+      /* Player damage flash */
+      #playerRect.hit { animation: player-hit 250ms ease; }
+      @keyframes player-hit { 0%{filter:brightness(1)} 50%{filter:brightness(1.8)} 100%{filter:brightness(1)} }
+      /* HP badge shown over each player */
+      .hpBadge {
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #e5e7eb;
+        background: rgba(2,6,23,0.7);
+        border: 1px solid rgba(148,163,184,0.35);
+        border-radius: 999px;
+        padding: 2px 8px;
+        z-index: 2;
+        white-space: nowrap;
+      }
+      .playerName {
+        margin-top: 4px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      }
+      /* Effects overlay */
+      #effects {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 3;
+      }
+      /* Cards area above the cabinet */
+      #cards {
+        position: absolute;
+        left: 0; right: 0;
+        bottom: calc(var(--cabinet-height));
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        align-items: end;
+        justify-items: center;
+        padding: 10px 12px;
+        gap: 10px;
+        height: var(--cards-height); /* bottom portion on mobile */
+        pointer-events: none; /* cards display only for now */
+      }
+      .card {
+        --card-bg: rgba(255,255,255,0.95);
+        --card-ink: #111827; /* default dark ink */
+        --card-accent: #ef4444; /* red for hearts/diamonds */
+        width: min(22vw, 180px);
+        aspect-ratio: 2.5 / 3.5; /* classic playing card ratio */
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--card-ink);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.35);
+        position: relative;
+        padding: 8px;
+        transition: transform 300ms ease, opacity 250ms ease; /* for use/discard animation */
+        will-change: transform, opacity;
+      }
+      .card .corner {
+        position: absolute;
+        font-weight: 800;
+        line-height: 1.05;
+        text-align: center;
+        color: var(--card-ink);
+      }
+      .card .corner.tl { top: 6px; left: 6px; }
+      .card .corner.br { bottom: 6px; right: 6px; transform: rotate(180deg); }
+      .card .center {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 2.2rem;
+        color: var(--card-ink);
+      }
+      .card .tag { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); background:rgba(2,6,23,0.8); color:var(--text); border:1px solid rgba(148,163,184,0.35); border-radius:999px; padding:2px 8px; font-size:0.7rem; font-weight:700; letter-spacing:0.3px; opacity:0; transition:opacity 200ms ease; pointer-events:none; white-space:nowrap; }
+      /* Mobile priority sizing */
+      @media (max-width: 767px) {
+        #cards { height: var(--cards-height); }
+        .card { width: min(26vw, 160px); }
+      }
+      /* Desktop tuning */
+      @media (min-width: 768px) {
+        :root { --cards-height: 24vh; }
+        #cards {
+          height: 24vh;
+          display: flex;               /* side-by-side */
+          justify-content: center;     /* centered horizontally */
+          align-items: flex-end;       /* sit on the baseline */
+          gap: 8px;                    /* small gap between cards */
+          padding-left: 0;
+          padding-right: 0;
+          /* Move cards down by half of their height (≈98px for 140px width at 2.5:3.5 ratio) */
+          bottom: calc(var(--cabinet-height) - 98px);
+        }
+        .card { width: 140px; }
+      }
+      /* Overlay + Modal for menus/lobbies */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(2, 6, 23, 0.84);
+        z-index: 50;
+        padding: 16px;
+        padding-bottom: calc(16px + var(--safe));
+      }
+      .modal {
+        width: min(92vw, 420px);
+        max-width: 92vw;
+        max-height: 80vh;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(148,163,184,0.25);
+        padding: 18px 16px;
+        border-radius: 14px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+      }
+      .modal h2, .modal h3 { margin: 0 0 4px 0; text-align: center; }
+      .form-row { display: flex; gap: 8px; align-items: center; width: 100%; }
+      .input {
+        flex: 1;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: rgba(2,6,23,0.6);
+        color: #e5e7eb;
+      }
+      .btn { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148,163,184,0.35); font-weight: 800; }
+      .btn-primary { background: #16a34a; color: #fff; }
+      .btn-danger { background: #ef4444; color: #fff; }
+      .btn-ghost { background: transparent; color: #e5e7eb; }
+      .btn-wide { width: 100%; }
+      /* Bottom cabinet */
+      .cabinet {
+        position: relative;
+        padding-bottom: calc(var(--safe) + 8px);
+        padding-left: 16px;
+        padding-right: 16px;
+        backdrop-filter: blur(6px);
+        background: rgba(2, 6, 23, 0.66);
+        border-top: 1px solid rgba(148, 163, 184, 0.25);
+        display: grid;
+        grid-template-columns: 1fr auto auto auto 1fr;
+        align-items: center;
+      }
+      /* Left & right info */
+      .metric {
+        display: flex;
+        flex-direction: column; /* stack label above value */
+        align-items: center;
+        justify-content: center; /* center contents within each column */
+        gap: 4px;
+        font-weight: 600;
+        white-space: nowrap;
+        justify-self: center; /* center the block within the grid cell */
+        text-align: center;
+      }
+      .metric .label {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      /* Center buy button */
+      .buy {
+        width: min(14.85vw, 121.5px); /* 25% smaller */
+        height: min(14.85vw, 121.5px); /* 25% smaller */
+        max-height: calc(var(--cabinet-height) - 12px);
+        max-width: calc(var(--cabinet-height) - 12px);
+        aspect-ratio: 1 / 1;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--accent);
+        color: white;
+        font-weight: 800;
+        font-size: 1em; /* set button text to normal size */
+        letter-spacing: 0.5px;
+        text-align: center;
+        box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+        border: 2px solid rgba(255,255,255,0.25);
+        cursor: pointer;
+        user-select: none;
+      }
+      .buy[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        filter: saturate(0.85) brightness(0.9);
+        box-shadow: 0 4px 10px rgba(239, 68, 68, 0.18);
+        pointer-events: none;
+      }
+      .buy small { display:block; font-weight:700; opacity:0.9; }
+      .buy:active { transform: translateY(1px); }
+      /* Responsive tweaks */
+      @media (min-width: 768px) {
+        :root { --cabinet-height: 12vh; }
+        .buy { width: 94.5px; height: 94.5px; } /* 25% smaller on desktop */
+      }
+
+      /* Mobile font scaling: keep desktop perfect, scale down for small screens */
+      @media (max-width: 767px) {
+        body { font-size: 1.25rem; } /* slightly smaller for mobile to fit comfortably */
+        .buy {
+          font-size: 0.68em; /* another ~15% reduction from 0.8em */
+          width: min(14.515875vw, 118.76625px); /* increase mobile circle by 15% */
+          height: min(14.515875vw, 118.76625px);
+        }
+        .buy small { font-size: 0.68em; } /* reduce amount text similarly */
+        .metric { font-size: 0.95em; }
+        /* Ensure progress label dark green is visible on mobile */
+        .progress .label {
+          color: #064e3b;
+          mix-blend-mode: normal;
+        }
+      }
+      #monsterArea img.shake { animation: monster-shake 300ms ease; }
+      /* Green tint for heal */
+      #monsterArea img.healTint {
+        filter: drop-shadow(0 10px 24px rgba(0,0,0,0.5)) sepia(0.2) saturate(1.3) hue-rotate(60deg) brightness(1.05);
+        animation: monster-heal 500ms ease;
+      }
+      /* Red tint for damage */
+      #monsterArea img.damageTint {
+        filter: drop-shadow(0 10px 24px rgba(0,0,0,0.5)) sepia(0.4) saturate(1.6) hue-rotate(-20deg) brightness(0.95);
+        animation: monster-damage 380ms ease;
+      }
+@keyframes monster-shake { 0%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}100%{transform:translateX(0)} }
+@keyframes monster-heal { 0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)} }
+@keyframes monster-damage { 0%{transform:scale(1)}50%{transform:scale(0.98)}100%{transform:scale(1)} }
+    </style>
+  </head>
+  <body>
+    <!-- Main Menu -->
+    <section id="mainMenu" aria-label="Main Menu" class="overlay">
+      <div class="modal">
+        <h2>Card Combat</h2>
+        <div class="form-row">
+          <input id="joinCodeInput" class="input" type="text" inputmode="latin" maxlength="8" placeholder="Enter lobby code" aria-label="Lobby code" />
+          <button id="joinBtn" class="btn btn-primary">Join</button>
+        </div>
+        <button id="createLobbyBtn" class="btn btn-danger btn-wide">Create Lobby</button>
+      </div>
+    </section>
+
+    <!-- Lobby Screen -->
+    <section id="lobbyScreen" aria-label="Lobby" class="overlay" style="display:none;">
+      <div class="modal">
+        <h3>Lobby</h3>
+        <div><strong>Code:</strong> <span id="lobbyCodeText"></span></div>
+        <div>
+          <strong>Players</strong>
+          <ul id="playerList" style="list-style:none; padding:0; margin:8px 0; display:flex; flex-direction:column; gap:6px;"></ul>
+        </div>
+        <button id="startGameBtn" class="btn btn-primary btn-wide">Start Game</button>
+        <button id="leaveLobbyBtn" class="btn btn-ghost btn-wide">Leave</button>
+      </div>
+    </section>
+    <header class="progress-wrap" aria-label="Progress">
+      <div class="progress-outer">
+        <div id="levelBadge" aria-label="Monster level">1</div>
+        <div class="progress" id="progressBar">
+        <div class="fill" id="progressFill"></div>
+  <div class="label" id="progressLabel">18000 / 20000</div>
+        <!-- HP label removed -->
+        </div>
+      </div>
+      <div id="jackpot" aria-live="polite">£5000</div>
+    </header>
+  <main id="game" aria-label="Game area" style="visibility:hidden;">
+      <!-- Monster zone (between progress bar and character area) -->
+      <section id="monsterArea" aria-label="Monster area">
+        <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
+        <button id="recycleBtn" aria-label="Change Monster" title="Change Monster">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.37 4.36A9 9 0 0020.49 15" />
+          </svg>
+        </button>
+      </section>
+      <!-- Character band -->
+      <section id="characterArea" aria-label="Character area">
+        <div id="player" class="playerUnit" style="left: 50%">
+          <div class="hpBadge" id="playerHp" aria-live="polite">50 / 50</div>
+          <div id="playerRect"></div>
+          <div class="playerName" id="playerName">Player 1</div>
+        </div>
+      </section>
+      <!-- Mobile-priority card draw area (bottom 30% of screen) -->
+      <section id="cards" aria-label="Player cards"></section>
+      <div id="effects" aria-hidden="true"></div>
+    </main>
+    <footer class="cabinet" aria-label="Controls cabinet">
+      <div class="metric" id="balance">
+        <span class="label">Balance</span>
+        <span class="value" aria-live="polite">£100</span>
+      </div>
+      <!-- stake minus button -->
+      <button class="buy-step" id="stakeMinus" aria-label="Decrease Stake">−</button>
+      <button class="buy" id="buyBtn" aria-label="Buy In">
+        <div>
+          <div>Buy In</div>
+          <small>£1</small>
+        </div>
+      </button>
+      <!-- stake plus button -->
+      <button class="buy-step" id="stakePlus" aria-label="Increase Stake">+</button>
+      <div class="metric" id="prize">
+        <span class="label">Prize</span>
+        <span class="value" aria-live="polite">£0</span>
+      </div>
+      <!-- removed stake input -->
+    </footer>
+    <script>
+      // --- Simple client-side lobby routing (no backend) ---
+      // Uses URL hash (? or #) code and localStorage to simulate shared lobby on same device.
+      const mainMenuEl = document.getElementById('mainMenu');
+      const lobbyEl = document.getElementById('lobbyScreen');
+      const lobbyCodeText = document.getElementById('lobbyCodeText');
+      const playerListEl = document.getElementById('playerList');
+      const startGameBtn = document.getElementById('startGameBtn');
+      const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
+      const createLobbyBtn = document.getElementById('createLobbyBtn');
+      const joinBtn = document.getElementById('joinBtn');
+      const joinCodeInput = document.getElementById('joinCodeInput');
+      // WebSocket backend wiring
+      let ws = null;
+      let wsConnected = false;
+  let latestRoster = [];
+  let selfId = null;
+  const lobbyPlayers = new Map(); // id -> { name, hp, el }
+      function getDefaultWsUrl(){
+        const saved = localStorage.getItem('cc_ws_url');
+        if (saved) return saved;
+        const host = location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') return 'ws://localhost:8080';
+        // If you deploy to Render, set cc_ws_url in localStorage to your public wss URL
+        return '';
+      }
+      function connectWS(url){
+        if (!url) return;
+        try {
+          ws = new WebSocket(url);
+        } catch { return; }
+        ws.addEventListener('open', ()=>{ wsConnected = true; console.log('WS connected'); });
+        ws.addEventListener('close', ()=>{ wsConnected = false; console.log('WS closed'); });
+        ws.addEventListener('error', ()=>{ wsConnected = false; console.log('WS error'); });
+        ws.addEventListener('message', (ev)=>{
+          let msg = {}; try { msg = JSON.parse(ev.data); } catch { return; }
+          if (msg.type === 'created') {
+            const code = msg.code; if (!code) return;
+            if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
+            location.hash = '#' + code;
+            renderLobby(code);
+            showLobby();
+          } else if (msg.type === 'joined') {
+            const code = msg.code; if (!code) return;
+            if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
+            location.hash = '#' + code;
+            renderLobby(code);
+            showLobby();
+          } else if (msg.type === 'roster') {
+            latestRoster = Array.isArray(msg.players) ? msg.players : [];
+            const code = msg.code || (location.hash||'').replace('#','');
+            renderLobby(code, latestRoster);
+          } else if (msg.type === 'started') {
+            showGame();
+          } else if (msg.type === 'damageMonster') {
+            const amt = Math.max(0, Number(msg.amount)||0);
+            if (amt > 0) {
+              progress = Math.max(0, progress - amt);
+              const pct = goal > 0 ? (progress / goal) : 0;
+              progressFill.style.width = `${pct * 100}%`;
+              progressLabel.textContent = `${progress} / ${goal}`;
+              monsterFeedback('damage');
+            }
+          } else if (msg.type === 'healPlayer') {
+            const { id, amount } = msg; if (!id) return;
+            applyHealToPlayer(id, Number(amount)||0);
+          } else if (msg.type === 'jokerAttack') {
+            const dmg = Math.max(1, Number(msg.damage)||1);
+            const targets = Array.isArray(msg.targets) ? msg.targets : [];
+            showMonsterAttackOverlay();
+            applyJokerDamageToTargets(dmg, targets.length ? targets : null);
+          }
+        });
+      }
+
+      // Helpers
+      function genCode(){
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let s = '';
+        for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)];
+        return s;
+      }
+      function getLobbyStore(){
+        try { return JSON.parse(localStorage.getItem('cc_lobbies')||'{}'); } catch { return {}; }
+      }
+      function setLobbyStore(data){ localStorage.setItem('cc_lobbies', JSON.stringify(data)); }
+      function addPlayerToLobby(code, name){
+        const store = getLobbyStore();
+        if (!store[code]) store[code] = { players: [] };
+        if (!store[code].players.includes(name)) store[code].players.push(name);
+        setLobbyStore(store);
+      }
+      function removePlayerFromLobby(code, name){
+        const store = getLobbyStore();
+        if (store[code]) { store[code].players = store[code].players.filter(p=>p!==name); setLobbyStore(store); }
+      }
+      function renderLobby(code, playersFromServer){
+        lobbyCodeText.textContent = code;
+        playerListEl.innerHTML = '';
+        const players = Array.isArray(playersFromServer)
+          ? playersFromServer.map(p=>({ id: p.id || p.name, name: p.name || String(p) }))
+          : (getLobbyStore()[code]?.players || []);
+        for (const p of players){
+          const li = document.createElement('li');
+          li.textContent = p.name || String(p);
+          playerListEl.appendChild(li);
+        }
+        // Also render player avatars in the character band
+        renderLobbyAvatars(players);
+      }
+
+      function setSelfIdentity(name){
+        try { localStorage.setItem('cc_self_name', name); } catch {}
+      }
+
+      function renderLobbyAvatars(players){
+        try {
+          if (!Array.isArray(players)) players = [];
+          const area = document.getElementById('characterArea');
+          if (!area) return;
+          // Remove any existing cloned units (keep #player as the local player)
+          for (const el of Array.from(area.querySelectorAll('.playerUnit'))){
+            if (el.id !== 'player') el.remove();
+          }
+          lobbyPlayers.clear();
+          // Update local player's displayed name
+          const localNameEl = document.getElementById('playerName');
+          if (localNameEl) localNameEl.textContent = selfName;
+          // Compute available width for random placement
+          const areaRect = area.getBoundingClientRect();
+          const rectW = 20; // player rect width
+          const minX = rectW/2 + 8;
+          const maxX = Math.max(minX + 1, areaRect.width - rectW/2 - 8);
+          function randomX(){ return Math.floor(Math.random() * (maxX - minX) + minX); }
+          // Create a unit for each remote player
+          for (const p of players){
+            const pid = p.id || p.name;
+            const name = p.name || String(p);
+            if (name === selfName || pid === selfId) continue;
+            const unit = document.createElement('div');
+            unit.className = 'playerUnit';
+            unit.style.left = randomX() + 'px';
+            // HP badge
+            const hp = document.createElement('div');
+            hp.className = 'hpBadge';
+            hp.textContent = '50 / 50';
+            // Body
+            const rect = document.createElement('div');
+            rect.className = 'playerRect';
+            // Name label
+            const label = document.createElement('div');
+            label.className = 'playerName';
+            label.textContent = name;
+            unit.appendChild(hp);
+            unit.appendChild(rect);
+            unit.appendChild(label);
+            area.appendChild(unit);
+            lobbyPlayers.set(pid, { name, hp: 50, el: unit });
+          }
+          // Register self
+          lobbyPlayers.set(selfId || 'self', { name: selfName, hp: 50, el: document.getElementById('player') });
+        } catch {}
+      }
+
+      function updateHpBadgeFor(id){
+        const entry = lobbyPlayers.get(id);
+        if (!entry || !entry.el) return;
+        const badge = entry.el.querySelector('.hpBadge');
+        if (badge) badge.textContent = `${Math.max(0, entry.hp)} / 50`;
+      }
+      function applyHealToPlayer(id, amount){
+        const entry = lobbyPlayers.get(id);
+        if (!entry) return;
+        entry.hp = Math.min(50, (entry.hp || 0) + Math.max(0, amount||0));
+        updateHpBadgeFor(id);
+      }
+      function applyJokerDamageToTargets(dmg, targets){
+        const ids = Array.isArray(targets) && targets.length ? targets : Array.from(lobbyPlayers.keys());
+        for (const id of ids){
+          const entry = lobbyPlayers.get(id);
+          if (!entry) continue;
+          entry.hp = Math.max(0, (entry.hp || 0) - Math.max(0, dmg||0));
+          updateHpBadgeFor(id);
+          // Flash the hit player's rect or badge
+          if (entry.el){
+            const rect = entry.el.querySelector('#playerRect') || entry.el.querySelector('.playerRect');
+            if (rect) {
+              rect.classList.add('hit');
+              setTimeout(()=>rect.classList.remove('hit'), 260);
+            }
+            const badge = entry.el.querySelector('.hpBadge');
+            if (badge) {
+              badge.animate([
+                { filter: 'brightness(1)' },
+                { filter: 'brightness(1.8)' },
+                { filter: 'brightness(1)' }
+              ], { duration: 260, easing: 'ease-in-out' });
+            }
+          }
+          // Keep local numeric HP in sync for self if tracked separately
+          if (id === (selfId || 'self')) {
+            try {
+              playerHp = Math.max(0, Math.min(playerMaxHp, entry.hp));
+              updatePlayerHp();
+            } catch {}
+          }
+        }
+      }
+      function showMonsterAttackOverlay(){
+        const area = document.getElementById('monsterArea');
+        if (!area) return;
+        const tag = document.createElement('div');
+        tag.textContent = 'Attack!';
+        tag.style.position = 'absolute';
+        tag.style.top = '8px';
+        tag.style.left = '50%';
+        tag.style.transform = 'translateX(-50%)';
+        tag.style.background = 'rgba(2,6,23,0.8)';
+        tag.style.color = '#fde68a';
+        tag.style.border = '1px solid rgba(148,163,184,0.35)';
+        tag.style.borderRadius = '999px';
+        tag.style.padding = '4px 10px';
+        tag.style.fontWeight = '800';
+        tag.style.fontSize = '0.9rem';
+        tag.style.pointerEvents = 'none';
+        tag.style.opacity = '0';
+        tag.style.zIndex = '4';
+        area.appendChild(tag);
+        try {
+          const anim = tag.animate([
+            { transform: 'translate(-50%, 0) scale(0.9)', opacity: 0 },
+            { transform: 'translate(-50%, 0) scale(1)', opacity: 1 },
+            { transform: 'translate(-50%, 0) scale(1.05)', opacity: 0 }
+          ], { duration: 800, easing: 'ease-out', fill: 'forwards' });
+          anim.finished.then(()=> tag.remove()).catch(()=> tag.remove());
+        } catch {
+          // Fallback
+          tag.style.transition = 'opacity 200ms ease';
+          requestAnimationFrame(()=>{ tag.style.opacity = '1'; });
+          setTimeout(()=>{ tag.style.opacity = '0'; setTimeout(()=> tag.remove(), 220); }, 600);
+        }
+      }
+      function applyJokerDamageToAll(dmg){
+        for (const [id, entry] of lobbyPlayers){
+          entry.hp = Math.max(0, (entry.hp || 0) - dmg);
+          updateHpBadgeFor(id);
+          if (entry.el && id === (selfId || 'self')) {
+            const rect = entry.el.querySelector('#playerRect') || entry.el.querySelector('.playerRect');
+            if (rect) {
+              rect.classList.add('hit');
+              setTimeout(()=>rect.classList.remove('hit'), 260);
+            }
+          }
+        }
+      }
+      function showMenu(){ mainMenuEl.style.display='grid'; lobbyEl.style.display='none'; document.getElementById('game').style.visibility='hidden'; }
+      function showLobby(){ mainMenuEl.style.display='none'; lobbyEl.style.display='grid'; document.getElementById('game').style.visibility='hidden'; }
+      function showGame(){ mainMenuEl.style.display='none'; lobbyEl.style.display='none'; document.getElementById('game').style.visibility='visible'; }
+
+      // Basic identity on this device
+      const selfName = (()=>{
+        const k='cc_self_name';
+        let n = localStorage.getItem(k);
+        if (!n) { n = 'Player-' + Math.floor(1000+Math.random()*9000); localStorage.setItem(k,n); }
+        return n;
+      })();
+
+      // Navigation
+      function navigateToLobby(code){
+        if (!code) return;
+        location.hash = '#'+code;
+        addPlayerToLobby(code, selfName);
+        renderLobby(code);
+        showLobby();
+      }
+      function leaveLobby(){
+        const code = (location.hash||'').replace('#','');
+        if (code) removePlayerFromLobby(code, selfName);
+        location.hash = '';
+        showMenu();
+      }
+
+      // Wire buttons
+      createLobbyBtn?.addEventListener('click', ()=>{
+        if (wsConnected && ws) {
+          ws.send(JSON.stringify({ type: 'create', name: selfName }));
+        } else {
+          const code = genCode();
+          const store = getLobbyStore();
+          if (!store[code]) { store[code] = { players: [] }; setLobbyStore(store); }
+          navigateToLobby(code);
+        }
+      });
+      joinBtn?.addEventListener('click', ()=>{
+        const raw = (joinCodeInput?.value||'').toUpperCase().trim();
+        const code = raw.replace(/[^A-Z0-9]/g,'').slice(0,8);
+        if (!code) return;
+        if (wsConnected && ws) {
+          ws.send(JSON.stringify({ type: 'join', code, name: selfName }));
+        } else {
+          navigateToLobby(code);
+        }
+      });
+      startGameBtn?.addEventListener('click', ()=>{
+        if (wsConnected && ws) ws.send(JSON.stringify({ type: 'start' }));
+        else showGame();
+      });
+      leaveLobbyBtn?.addEventListener('click', ()=>{
+        if (wsConnected && ws) ws.send(JSON.stringify({ type: 'leave' }));
+        leaveLobby();
+      });
+
+      // Deep link support: if URL has a code, join that lobby
+      window.addEventListener('DOMContentLoaded', ()=>{
+        const url = getDefaultWsUrl();
+        if (url) connectWS(url);
+        const code = (location.hash||'').replace('#','').trim();
+        if (code) {
+          if (wsConnected && ws) {
+            ws.send(JSON.stringify({ type: 'join', code, name: selfName }));
+          } else {
+            renderLobby(code);
+            showLobby();
+            addPlayerToLobby(code, selfName);
+          }
+        } else { showMenu(); }
+      });
+
+      // Minimal interaction scaffold
+  const buyBtn = document.getElementById('buyBtn');
+      const balanceEl = document.querySelector('#balance .value');
+      const prizeEl = document.querySelector('#prize .value');
+      const cardsEl = document.getElementById('cards');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const levelBadge = document.getElementById('levelBadge');
+  const characterArea = document.getElementById('characterArea');
+  const player = document.getElementById('player');
+  const playerRectEl = document.getElementById('playerRect');
+  const jackpotEl = document.getElementById('jackpot');
+  const recycleBtn = document.getElementById('recycleBtn');
+  const playerHpEl = document.getElementById('playerHp');
+  // Track the currently selected monster for jackpot contributions
+  let currentMonster = null;
+      let balance = 100;
+      let prize = 0;
+  let progress = 18000;
+  let goal = 20000;
+  let jackpot = 5000;
+  let runToken = 0; // cancels pending sequences on new buys
+  const supportsWAAPI = typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.animate === 'function';
+      const stakeSteps = [0.1, 0.2, 0.5, 1, 2];
+      let stakeIndex = 3; // £1 default
+      let stake = stakeSteps[stakeIndex];
+  const playerMaxHp = 50;
+  let playerHp = playerMaxHp;
+
+      const stakeMinusBtn = document.getElementById('stakeMinus');
+      const stakePlusBtn = document.getElementById('stakePlus');
+
+      function formatStake(s) { return s < 1 ? `${Math.round(s*100)}p` : `£${s}`; }
+      function formatCurrency(v) {
+        const n = Number(v) || 0;
+        if (n === 0) return '£0';
+        if (Math.abs(n) < 1) return `${Math.round(n * 100)}p`;
+        // Show whole pounds without decimals, otherwise 2dp
+        return Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`;
+      }
+      function updateStakeDisplay(){
+        const small = document.querySelector('#buyBtn small');
+        if (small) small.textContent = formatStake(stake);
+      }
+      function updateJackpotDisplay(){
+        if (!jackpotEl) return;
+        const text = `${formatCurrency(jackpot)}`;
+        jackpotEl.textContent = text;
+      }
+      function updatePlayerHp(){ if (playerHpEl) playerHpEl.textContent = `${playerHp} / ${playerMaxHp}`; }
+      updateStakeDisplay();
+      updateJackpotDisplay();
+      updatePlayerHp();
+
+      // Load monsters from JSON and initialize starting monster (random level 1)
+      async function initStartMonster() {
+        try {
+          const res = await fetch('assets/monsters.json');
+          if (!res.ok) throw new Error('Failed to load monsters.json');
+          const monsters = await res.json();
+          if (!Array.isArray(monsters) || monsters.length === 0) return;
+          const level1 = monsters.filter(m => Number(m.level) === 1);
+          const pool = level1.length > 0 ? level1 : monsters;
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          // Set sprite image if available
+          const img = document.getElementById('monsterSprite');
+          if (img && pick && pick.image) {
+            img.setAttribute('src', String(pick.image));
+            if (pick.name) img.setAttribute('alt', String(pick.name));
+          }
+          // Align UI (level badge, progress/goal)
+          currentMonster = pick;
+          updateMonsterUI({ level: Number(pick.level) || 1, health: Number(pick.health) || goal });
+        } catch (e) {
+          // If fetch fails, keep existing defaults
+          // No-op
+        }
+      }
+
+      // Monster recycle logic — pick a random monster from monsters.json and sync health/level
+      async function pickRandomMonsterFromJson(currentSrc) {
+        try {
+          const res = await fetch('assets/monsters.json');
+          if (!res.ok) throw new Error('Failed to load monsters.json');
+          const monsters = await res.json();
+          if (!Array.isArray(monsters) || monsters.length === 0) return null;
+          // Avoid picking same image consecutively
+          const pool = monsters.filter(m => !currentSrc || !String(currentSrc).endsWith(String(m.image)));
+          const list = pool.length > 0 ? pool : monsters;
+          const idx = Math.floor(Math.random() * list.length);
+          return list[idx];
+        } catch {
+          return null;
+        }
+      }
+      recycleBtn?.addEventListener('click', async () => {
+        const img = document.getElementById('monsterSprite');
+        if (!img) return;
+        const current = img.getAttribute('src') || '';
+        const nextMonster = await pickRandomMonsterFromJson(current);
+        if (nextMonster && nextMonster.image) {
+          img.setAttribute('src', String(nextMonster.image));
+          if (nextMonster.name) img.setAttribute('alt', String(nextMonster.name));
+          currentMonster = nextMonster;
+          updateMonsterUI({ level: Number(nextMonster.level) || 1, health: Number(nextMonster.health) || goal });
+        }
+        // Small feedback
+        img.classList.add('shake');
+        setTimeout(() => img.classList.remove('shake'), 320);
+      });
+      stakeMinusBtn?.addEventListener('click', (e)=>{
+        e.preventDefault();
+        if (stakeIndex > 0) { stakeIndex--; stake = stakeSteps[stakeIndex]; updateStakeDisplay(); }
+      });
+      stakePlusBtn?.addEventListener('click', (e)=>{
+        e.preventDefault();
+        if (stakeIndex < stakeSteps.length - 1) { stakeIndex++; stake = stakeSteps[stakeIndex]; updateStakeDisplay(); }
+      });
+
+      function enableBuy(){
+        buyBtn.disabled = false;
+        buyBtn.removeAttribute('aria-disabled');
+      }
+
+      function handleBuy() {
+        if (buyBtn.disabled) return;
+        if (balance <= 0) return;
+        buyBtn.disabled = true;
+        buyBtn.setAttribute('aria-disabled', 'true');
+        // Deduct stake (supports pence)
+        balance = Math.max(0, Number((balance - stake).toFixed(2)));
+        balanceEl.textContent = `£${balance}`;
+  prizeEl.textContent = formatCurrency(prize);
+
+        // Contribute stake * jackpotPercent to jackpot based on current monster
+        if (currentMonster && typeof currentMonster.jackpotPercent !== 'undefined') {
+          const jpPct = Math.max(0, Number(currentMonster.jackpotPercent) || 0);
+          const contrib = Number(((stake * jpPct) / 100).toFixed(2));
+          jackpot = Number((jackpot + contrib).toFixed(2));
+          updateJackpotDisplay();
+        }
+
+        // Draw cards
+        cardsEl.innerHTML = '';
+        let newCards = drawThreeCards(cardsEl);
+        if (!Array.isArray(newCards)) newCards = Array.from(cardsEl.querySelectorAll('.card'));
+
+          const thisRun = ++runToken;
+          setTimeout(() => {
+            if (thisRun !== runToken) return;
+            const seq = useCardsSequentially(Array.isArray(newCards) ? newCards : [], thisRun);
+            seq.then(() => { finalizePrize(); enableBuy(); }).catch(() => { finalizePrize(); enableBuy(); });
+          }, 1000);
+
+        // No auto progress change
+      }
+      // Use pointer events to handle both mouse and touch reliably
+      buyBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!buyBtn.disabled) handleBuy();
+      }, { passive: false });
+
+      // Initial render of progress reflecting the text exactly
+      (function initProgress(){
+            const pct = progress / goal;
+            progressFill.style.width = `${pct * 100}%`;
+            // Default label shows monster name; will be updated when monster changes
+            // progressLabel.textContent already set in HTML; keep in sync with current sprite if needed
+          })();
+
+          // Initialize starting monster after DOM is ready
+          window.addEventListener('DOMContentLoaded', () => {
+            initStartMonster();
+          });
+
+          function updateMonsterUI(monster){
+            // monster: { name, level, health }
+            if (monster && typeof monster.health === 'number') {
+              progress = monster.health; // start full health
+              goal = monster.health;     // set goal to monster's max health
+            }
+            if (monster && typeof monster.level === 'number' && levelBadge) {
+              levelBadge.textContent = String(monster.level);
+            }
+            const pct = progress / goal;
+            progressFill.style.width = `${pct * 100}%`;
+            // Always show numeric HP current/total
+            progressLabel.textContent = `${progress} / ${goal}`;
+          }
+
+      // Character placement: horizontal drag within the character area
+      (function initCharacterDrag(){
+        if (!characterArea || !player || !playerRectEl) return;
+        // Center horizontally by default
+        centerPlayer();
+        let dragging = false;
+        function clamp(x){
+          const areaRect = characterArea.getBoundingClientRect();
+          const rectW = playerRectEl.getBoundingClientRect().width;
+          const minX = rectW/2; // because we translateX(-50%)
+          const maxX = areaRect.width - rectW/2;
+          return Math.max(minX, Math.min(maxX, x));
+        }
+        function centerPlayer(){
+          const areaRect = characterArea.getBoundingClientRect();
+          const rectW = playerRectEl.getBoundingClientRect().width;
+          const x = areaRect.width / 2;
+          player.style.left = x + 'px';
+        }
+        function toLocalX(evt){
+          const areaRect = characterArea.getBoundingClientRect();
+          const pageX = (evt.touches && evt.touches[0] ? evt.touches[0].clientX : evt.clientX);
+          return pageX - areaRect.left;
+        }
+        const start = (e)=>{
+          e.preventDefault(); dragging = true;
+          document.addEventListener('pointermove', move, { passive:false });
+          document.addEventListener('pointerup', end, { passive:false, once:true });
+        };
+        const move = (e)=>{
+          if (!dragging) return;
+          const localX = toLocalX(e);
+          const x = clamp(localX);
+          player.style.left = x + 'px';
+        };
+        const end = ()=>{ dragging = false; document.removeEventListener('pointermove', move); };
+        playerRectEl.addEventListener('pointerdown', start, { passive:false });
+        window.addEventListener('resize', centerPlayer);
+      })();
+
+      // Draw returns list of card elements
+      function drawThreeCards(container) {
+        const deck = buildDeck();
+        const created = [];
+        // Pick 3 random cards
+        for (let i = 0; i < 3; i++) {
+          // 5% chance to draw a Joker card
+          const roll = Math.random();
+          let el;
+          if (roll < 0.05) {
+            el = renderCard({ r: 'Joker', s: 'JOKER' });
+          } else {
+            const idx = Math.floor(Math.random() * deck.length);
+            const card = deck.splice(idx, 1)[0];
+            el = renderCard(card);
+          }
+          container.appendChild(el);
+          created.push(el);
+        }
+        return created;
+      }
+
+      // Sequentially "use" cards: move up 30px, wait 1s, return, then discard
+      async function useCardsSequentially(cards, token) {
+        if (!Array.isArray(cards) || cards.length === 0) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        for (const el of cards) {
+          if (token !== runToken) return; // cancelled
+          if (!reduceMotion) {
+            try { await useCard(el); } catch {}
+            if (token !== runToken) return; // cancelled
+            // Discard animation (WAAPI or CSS fallback)
+            if (supportsWAAPI) {
+              const discard = el.animate([
+                { opacity: 1, transform: 'translateY(0) scale(1)' },
+                { opacity: 0, transform: 'translateY(10px) scale(0.98)' }
+              ], { duration: 250, easing: 'ease', fill: 'forwards' });
+              try { await discard.finished; } catch {}
+            } else {
+              el.style.transition = 'transform 250ms ease, opacity 250ms ease';
+              el.style.transform = 'translateY(10px) scale(0.98)';
+              el.style.opacity = '0';
+              await sleep(260);
+            }
+          }
+          // Keep the card's layout space to avoid shifting: hide instead of remove
+          el.style.opacity = '0';
+          el.style.visibility = 'hidden';
+          el.style.transform = 'translateY(0)';
+        }
+      }
+
+  function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+  function forceReflow(el){ void el.offsetWidth; }
+
+      async function useCard(el) {
+        const upPx = window.matchMedia('(max-width: 767px)').matches ? 60 : 30;
+        try {
+          const suit = el.dataset.suit || 'spade';
+          if (suit !== 'joker') spawnCardParticlesFromPlayer(suit);
+        } catch {}
+        let effectInfo = null;
+        try {
+          const suit = el.dataset.suit || 'spade';
+          // Use stored rank instead of parsing text
+          const rankText = el.dataset.rank || '';
+          const value = rankToValue(rankText);
+          effectInfo = applyCardEffect(suit, value, rankText);
+        } catch {}
+        const tag = el.querySelector('.tag');
+        if (tag) {
+          const suit = el.dataset.suit || 'spade';
+          const label = suitLabel(suit);
+          let amountText = '';
+          if (effectInfo && typeof effectInfo.amount !== 'undefined') {
+            if (suit === 'diamond') amountText = ` ${formatCurrency(effectInfo.amount)}`; else amountText = ` ${effectInfo.amount}`;
+          }
+          tag.textContent = `${label}${amountText}`;
+        }
+        if (supportsWAAPI) {
+          // Up animation
+          const up = el.animate([
+            { transform: 'translateY(0px)' },
+            { transform: `translateY(-${upPx}px)` }
+          ], { duration: 300, easing: 'ease-out', fill: 'forwards' });
+          if (tag) tag.style.opacity = '1';
+          try { await up.finished; } catch {}
+          await sleep(0);
+          // Down animation
+          const down = el.animate([
+            { transform: `translateY(-${upPx}px)` },
+            { transform: 'translateY(0px)' }
+          ], { duration: 300, easing: 'ease-in', fill: 'forwards' });
+          try { await down.finished; } catch {}
+          if (tag) tag.style.opacity = '0';
+        } else {
+          // CSS transition fallback
+          el.style.transition = 'transform 300ms ease-out';
+          el.style.transform = 'translateY(0px)';
+          forceReflow(el);
+          el.style.transform = `translateY(-${upPx}px)`;
+          if (tag) tag.style.opacity = '1';
+          await sleep(320);
+          await sleep(0);
+          el.style.transition = 'transform 300ms ease-in';
+          el.style.transform = 'translateY(0px)';
+          await sleep(320);
+          if (tag) tag.style.opacity = '0';
+        }
+      }
+
+      function suitLabel(suit) {
+        switch (suit) {
+          case 'spade': return 'Damage';
+          case 'diamond': return 'Prize';
+          case 'heart': return 'Heal';
+          case 'club': return 'Damage';
+          case 'joker': return 'Attack';
+          default: return '';
+        }
+      }
+
+      function buildDeck() {
+        const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+        const suits = ['♠','♥','♦','♣'];
+        const deck = [];
+        for (const r of ranks) {
+          for (const s of suits) {
+            deck.push({ r, s });
+          }
+        }
+        return deck;
+      }
+
+      function renderCard(card) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        // Joker special handling
+        if (card && card.r === 'Joker') {
+          el.dataset.suit = 'joker';
+          el.dataset.rank = 'Joker';
+          el.innerHTML = `
+            <span class="corner tl">Jkr<br>🃏</span>
+            <span class="center">🃏</span>
+            <span class="corner br">Jkr<br>🃏</span>
+            <span class="tag" aria-hidden="true"></span>
+          `;
+          el.style.setProperty('--card-ink', '#a78bfa');
+          el.style.setProperty('--card-bg', 'rgba(255,255,255,0.98)');
+          return el;
+        }
+        const suitMap = { '♠': 'spade', '♥': 'heart', '♦': 'diamond', '♣': 'club' };
+        el.dataset.suit = suitMap[card.s] || 'spade';
+        // Store explicit rank to avoid parsing issues
+        el.dataset.rank = String(card.r);
+        el.innerHTML = `
+          <span class="corner tl">${card.r}<br>${card.s}</span>
+          <span class="center">${card.s}</span>
+          <span class="corner br">${card.r}<br>${card.s}</span>
+          <span class="tag" aria-hidden="true"></span>
+        `;
+  // Color hearts/diamonds red ink, spades/clubs dark ink
+  const red = card.s === '♥' || card.s === '♦';
+  el.style.setProperty('--card-ink', red ? '#ef4444' : '#111827');
+        return el;
+      }
+
+      // Map rank string to numeric value for effects
+      function rankToValue(rank) {
+        const r = String(rank).trim();
+        if (r === 'A') return 14; // Ace high
+        if (r === 'K') return 13;
+        if (r === 'Q') return 12;
+        if (r === 'J') return 11;
+        const n = parseInt(r, 10);
+        return isNaN(n) ? 0 : n;
+      }
+
+      // Apply per-suit card effects to monster health (progress) and prize
+      function applyCardEffect(suit, value, rankText) {
+        const v = Math.max(0, Number(value) || 0);
+        const isFace = (rankText === 'J' || rankText === 'Q' || rankText === 'K');
+        const critBonus = rankText === 'J' ? 1 : rankText === 'Q' ? 2 : rankText === 'K' ? 3 : 0;
+        const critDamage = 10 + critBonus;
+        let amountApplied = 0;
+        let label = '';
+        if (suit === 'spade') {
+          const dmg = isFace ? critDamage : v;
+          amountApplied = dmg;
+          label = 'Damage';
+          if (wsConnected && ws) {
+            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg })); } catch {}
+          } else {
+            progress = Math.max(0, progress - dmg);
+            monsterFeedback('damage');
+          }
+        } else if (suit === 'diamond') {
+          // Face card multipliers; numbers use value/10
+          const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
+          let turnPrize;
+          if (rankText === 'A') {
+            turnPrize = Number((5 * stake).toFixed(2));
+          } else if (rankText === 'K') {
+            turnPrize = Number((3 * stake).toFixed(2));
+          } else if (rankText === 'Q') {
+            turnPrize = Number(((1.5) * stake).toFixed(2));
+          } else if (rankText === 'J') {
+            turnPrize = Number((1 * stake).toFixed(2));
+          } else if (isNumberCard) {
+            turnPrize = Number(((v / 10) * stake).toFixed(2));
+          } else {
+            turnPrize = 0;
+          }
+          amountApplied = turnPrize;
+          prize = Number((prize + turnPrize).toFixed(2));
+          prizeEl.textContent = formatCurrency(prize);
+          label = 'Prize';
+        } else if (suit === 'joker') {
+          // Joker triggers a monster attack on a random subset of players
+          label = 'Attack';
+          if (wsConnected && ws) {
+            try { ws.send(JSON.stringify({ type: 'jokerAttackRequest' })); } catch {}
+            amountApplied = undefined; // amount decided server-side
+          } else {
+            const dmg = Math.floor(Math.random() * 5) + 1;
+            amountApplied = dmg;
+            showMonsterAttackOverlay();
+            // Choose a random non-empty subset of players locally
+            let ids = Array.from(lobbyPlayers.keys());
+            if (ids.length === 0) ids = [selfId || 'self'];
+            // Shuffle ids
+            for (let i = ids.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              const tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+            }
+            const targetCount = Math.max(1, Math.floor(Math.random() * ids.length) + 1);
+            const targets = ids.slice(0, targetCount);
+            applyJokerDamageToTargets(dmg, targets);
+          }
+        } else if (suit === 'heart') {
+          // Hearts heal the player using the same formula we used for prize,
+          // converted to HP and capped at max HP.
+          const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
+          let healValueCurrency;
+          if (rankText === 'A') {
+            healValueCurrency = Number((5 * stake).toFixed(2));
+          } else if (rankText === 'K') {
+            healValueCurrency = Number((3 * stake).toFixed(2));
+          } else if (rankText === 'Q') {
+            healValueCurrency = Number(((1.5) * stake).toFixed(2));
+          } else if (rankText === 'J') {
+            healValueCurrency = Number((1 * stake).toFixed(2));
+          } else if (isNumberCard) {
+            healValueCurrency = Number(((v / 10) * stake).toFixed(2));
+          } else {
+            healValueCurrency = 0;
+          }
+          const healPoints = Math.max(0, Math.round(healValueCurrency));
+          amountApplied = healPoints;
+          if (healPoints > 0) {
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'healPlayer', id: selfId || 'self', amount: healPoints })); } catch {}
+            } else {
+              applyHealToPlayer(selfId || 'self', healPoints);
+            }
+          }
+          label = 'Heal';
+        } else if (suit === 'club') {
+          const dmg = isFace ? critDamage : v;
+          amountApplied = dmg;
+          label = 'Damage';
+          if (wsConnected && ws) {
+            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg })); } catch {}
+          } else {
+            progress = Math.max(0, progress - dmg);
+            monsterFeedback('damage');
+          }
+        }
+        const pct = progress / goal;
+        progressFill.style.width = `${pct * 100}%`;
+        progressLabel.textContent = `${progress} / ${goal}`;
+        return { label, amount: amountApplied };
+      }
+
+  function finalizePrize() {
+    if (prize > 0) {
+      balance = Number((balance + prize).toFixed(2));
+      balanceEl.textContent = `£${balance}`;
+      prize = 0;
+      prizeEl.textContent = formatCurrency(prize);
+    }
+  }
+
+      function monsterFeedback(type) {
+        const img = document.getElementById('monsterSprite');
+        if (!img) return;
+        if (type === 'damage') {
+          img.classList.remove('healTint');
+          img.classList.add('damageTint');
+          img.classList.add('shake');
+          setTimeout(() => { img.classList.remove('shake'); img.classList.remove('damageTint'); }, 380);
+        } else if (type === 'heal') {
+          img.classList.add('healTint');
+          setTimeout(() => img.classList.remove('healTint'), 520);
+        }
+      }
+
+      // Particle effects per suit — emitted from PLAYER rectangle
+      function spawnCardParticlesFromPlayer(suit) {
+        const gameEl = document.getElementById('game');
+        const effectsEl = document.getElementById('effects');
+        const playerRectEl = document.getElementById('playerRect');
+        const prizeMetric = document.querySelector('#prize .value');
+        if (!gameEl || !effectsEl || !playerRectEl) return;
+        const rect = playerRectEl.getBoundingClientRect();
+        const gameRect = gameEl.getBoundingClientRect();
+        const originX = rect.left - gameRect.left + rect.width / 2;
+        const originY = rect.top - gameRect.top + 2; // just above player's top
+        const targetXTop = gameRect.width / 2; // top center horizontally (default)
+        const targetYTop = 8; // near the top edge
+        const count = suit === 'diamond' ? 14 : suit === 'heart' ? 1 : 12;
+        for (let i = 0; i < count; i++) {
+          const p = document.createElement('div');
+          p.className = 'particle';
+          p.style.position = 'absolute';
+          p.style.left = originX + 'px';
+          p.style.top = originY + 'px';
+          p.style.pointerEvents = 'none';
+          p.style.willChange = 'transform, opacity';
+          let keyframes, duration, easing;
+          switch (suit) {
+            case 'spade': {
+              // Pink circles that arc towards the top center
+              const dx = (targetXTop - originX) * (0.85 + Math.random() * 0.25);
+              const dy = (originY - targetYTop) * (0.9 + Math.random() * 0.2);
+              const size = 6 + Math.random() * 6;
+              p.style.width = size + 'px';
+              p.style.height = size + 'px';
+              p.style.borderRadius = '50%';
+              p.style.background = '#ff4d9d';
+              keyframes = [
+                { transform: 'translate(0, 0)', opacity: 1 },
+                { transform: `translate(${dx}px, -${dy}px)`, opacity: 0 }
+              ];
+              duration = 600 + Math.random() * 300;
+              easing = 'ease-out';
+              break;
+            }
+            case 'diamond': {
+              // Gold coins that float down to the Prize amount
+              // Determine target near the prize value element (fallback to bottom center if not found)
+              let targetX = targetXTop;
+              let targetY = gameRect.height - 24; // near bottom as fallback
+              if (prizeMetric) {
+                const prizeRect = prizeMetric.getBoundingClientRect();
+                targetX = prizeRect.left - gameRect.left + prizeRect.width / 2;
+                targetY = prizeRect.top - gameRect.top + prizeRect.height / 2;
+              }
+              // Coin appearance
+              const size = 12 + Math.random() * 6;
+              p.style.width = size + 'px';
+              p.style.height = size + 'px';
+              p.style.borderRadius = '50%';
+              p.style.background = 'radial-gradient(circle at 35% 35%, #ffe08a 0%, #facc15 55%, #d97706 100%)';
+              p.style.boxShadow = '0 0 8px rgba(250, 204, 21, 0.8)';
+              // Gentle drift downward to the prize
+              const dx = (targetX - originX) * (0.9 + Math.random() * 0.2);
+              const dy = (targetY - originY) * (0.85 + Math.random() * 0.3);
+              keyframes = [
+                { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                { transform: `translate(${dx * 0.5}px, ${dy * 0.5}px) scale(1.05)`, opacity: 0.95 },
+                { transform: `translate(${dx}px, ${dy}px) scale(0.98)`, opacity: 0 }
+              ];
+              duration = 900 + Math.random() * 400;
+              easing = 'ease-in-out';
+              break;
+            }
+            case 'heart': {
+              // Green healing ring expanding from the player's center
+              const cx = rect.left - gameRect.left + rect.width / 2;
+              const cy = rect.top - gameRect.top + rect.height / 2;
+              p.style.left = cx + 'px';
+              p.style.top = cy + 'px';
+              const size = Math.max(rect.width, rect.height) * 1.2;
+              p.style.width = size + 'px';
+              p.style.height = size + 'px';
+              p.style.border = '3px solid #22c55e';
+              p.style.borderRadius = '50%';
+              p.style.background = 'transparent';
+              keyframes = [
+                { transform: 'translate(-50%, -50%) scale(0.8)', opacity: 0.9 },
+                { transform: 'translate(-50%, -50%) scale(2.4)', opacity: 0 }
+              ];
+              duration = 750;
+              easing = 'ease-out';
+              break;
+            }
+            case 'club':
+            default: {
+              // White curls moving in a sine-like path to top center
+              const dy = (originY - targetYTop);
+              const amp = 14 + Math.random() * 8;
+              const size = 5 + Math.random() * 4;
+              p.style.width = size + 'px';
+              p.style.height = size + 'px';
+              p.style.borderRadius = '50%';
+              p.style.background = '#ffffff';
+              keyframes = [
+                { transform: 'translate(0, 0)', opacity: 1 },
+                { transform: `translate(${(targetXTop-originX)*0.25 + amp}px, -${dy * 0.25}px)`, opacity: 0.95 },
+                { transform: `translate(${(targetXTop-originX)*0.5 - amp}px, -${dy * 0.5}px)`, opacity: 0.8 },
+                { transform: `translate(${(targetXTop-originX)*0.75 + amp}px, -${dy * 0.75}px)`, opacity: 0.6 },
+                { transform: `translate(${(targetXTop-originX)}px, -${dy}px)`, opacity: 0 }
+              ];
+              duration = 900 + Math.random() * 300;
+              easing = 'ease-in-out';
+              break;
+            }
+          }
+          effectsEl.appendChild(p);
+          try {
+            const anim = p.animate(keyframes, { duration, easing, fill: 'forwards' });
+            anim.finished.then(() => p.remove()).catch(() => p.remove());
+          } catch {
+            // Fallback via CSS transition if WAAPI is unsupported
+            p.style.transition = `transform ${duration}ms ${easing}, opacity ${duration}ms ${easing}`;
+            // Apply final frame
+            const last = keyframes[keyframes.length - 1];
+            requestAnimationFrame(() => {
+              p.style.transform = last.transform || '';
+              p.style.opacity = last.opacity != null ? String(last.opacity) : '0';
+              setTimeout(() => p.remove(), duration + 20);
+            });
+          }
+        }
+      }
+    </script>
+  </body>
+</html>
