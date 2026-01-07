@@ -10,7 +10,8 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 
 // Lobby state in-memory (consider Redis for multi-instance)
-const lobbies = new Map(); // code -> { players: Map(clientId, {name}), started: bool }
+// code -> { players: Map(ws -> {id,name}), started: bool, jackpot: number }
+const lobbies = new Map();
 const clients = new Map(); // ws -> { id, code, name }
 const nano = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 6);
 
@@ -21,6 +22,12 @@ function broadcast(code, type, payload) {
     if (ws.readyState === 1) {
       ws.send(JSON.stringify({ type, ...payload }));
     }
+  }
+}
+
+function sendTo(ws, type, payload) {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type, ...payload }));
   }
 }
 
@@ -51,6 +58,9 @@ wss.on('connection', (ws) => {
       client.name = msg.name || `Player-${shortId(client.id)}`;
       addPlayer(ws, client);
       ws.send(JSON.stringify({ type: 'created', code, you: { id: client.id, name: client.name } }));
+      // Send initial jackpot state to the creator
+      const lobby = lobbies.get(code);
+      if (lobby) sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
       sendRoster(code);
     } else if (type === 'join') {
       const code = String(msg.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -60,6 +70,9 @@ wss.on('connection', (ws) => {
       client.name = msg.name || `Player-${shortId(client.id)}`;
       addPlayer(ws, client);
       ws.send(JSON.stringify({ type: 'joined', code, you: { id: client.id, name: client.name } }));
+      // Send current jackpot state to the joiner
+      const lobby = lobbies.get(code);
+      if (lobby) sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
       sendRoster(code);
     } else if (type === 'leave') {
       removePlayer(ws);
@@ -77,6 +90,14 @@ wss.on('connection', (ws) => {
       const targetId = String(msg.id || client.id);
       const amount = Math.max(0, Number(msg.amount) || 0);
       if (amount > 0) broadcast(code, 'healPlayer', { code, by: client.id, id: targetId, amount });
+    } else if (type === 'jackpotContribute') {
+      const code = client.code; if (!code) return;
+      const lobby = lobbies.get(code); if (!lobby) return;
+      const amount = Math.max(0, Number(msg.amount) || 0);
+      if (amount > 0) {
+        lobby.jackpot = Number(((lobby.jackpot || 0) + amount).toFixed(2));
+        broadcast(code, 'jackpotUpdate', { code, by: client.id, delta: amount, jackpot: lobby.jackpot });
+      }
     } else if (type === 'jokerAttackRequest') {
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;
@@ -99,7 +120,7 @@ wss.on('connection', (ws) => {
 
 function ensureLobby(code) {
   if (!lobbies.has(code)) {
-    lobbies.set(code, { players: new Map(), started: false });
+    lobbies.set(code, { players: new Map(), started: false, jackpot: 1000 });
   }
 }
 function addPlayer(ws, client) {

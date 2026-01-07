@@ -545,6 +545,10 @@
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
             const code = msg.code || (location.hash||'').replace('#','');
             renderLobby(code, latestRoster);
+          } else if (msg.type === 'jackpotState') {
+            const value = Number(msg.jackpot) || 0;
+            jackpot = Number(value.toFixed(2));
+            updateJackpotDisplay();
           } else if (msg.type === 'started') {
             showGame();
           } else if (msg.type === 'damageMonster') {
@@ -564,6 +568,10 @@
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
             showMonsterAttackOverlay();
             applyJokerDamageToTargets(dmg, targets.length ? targets : null);
+          } else if (msg.type === 'jackpotUpdate') {
+            const next = Number(msg.jackpot) || 0;
+            jackpot = Number(next.toFixed(2));
+            updateJackpotDisplay();
           }
         });
       }
@@ -841,7 +849,7 @@
       let prize = 0;
   let progress = 18000;
   let goal = 20000;
-  let jackpot = 5000;
+  let jackpot = 1000;
   let runToken = 0; // cancels pending sequences on new buys
   const supportsWAAPI = typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.animate === 'function';
       const stakeSteps = [0.1, 0.2, 0.5, 1, 2];
@@ -955,12 +963,18 @@
         balanceEl.textContent = `£${balance}`;
   prizeEl.textContent = formatCurrency(prize);
 
-        // Contribute stake * jackpotPercent to jackpot based on current monster
+        // Contribute stake * jackpotPercent to shared jackpot (server if connected)
         if (currentMonster && typeof currentMonster.jackpotPercent !== 'undefined') {
           const jpPct = Math.max(0, Number(currentMonster.jackpotPercent) || 0);
           const contrib = Number(((stake * jpPct) / 100).toFixed(2));
-          jackpot = Number((jackpot + contrib).toFixed(2));
-          updateJackpotDisplay();
+          if (contrib > 0) {
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'jackpotContribute', amount: contrib })); } catch {}
+            } else {
+              jackpot = Number((jackpot + contrib).toFixed(2));
+              updateJackpotDisplay();
+            }
+          }
         }
 
         // Draw cards
