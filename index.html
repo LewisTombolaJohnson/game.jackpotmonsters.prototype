@@ -545,6 +545,22 @@
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
             const code = msg.code || (location.hash||'').replace('#','');
             renderLobby(code, latestRoster);
+            // Apply any provided normalized positions to avatars
+            try {
+              const area = document.getElementById('characterArea');
+              if (area) {
+                const rect = area.getBoundingClientRect();
+                for (const p of latestRoster) {
+                  const id = p.id || p.name; const entry = lobbyPlayers.get(id);
+                  if (!entry || !entry.el) continue;
+                  const xn = Number(p.x);
+                  if (Number.isFinite(xn)) {
+                    const px = (rect.width - 20) * Math.max(0, Math.min(1, xn)) + 10;
+                    entry.el.style.left = px + 'px';
+                  }
+                }
+              }
+            } catch {}
           } else if (msg.type === 'jackpotState') {
             const value = Number(msg.jackpot) || 0;
             jackpot = Number(value.toFixed(2));
@@ -568,6 +584,15 @@
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
             showMonsterAttackOverlay();
             applyJokerDamageToTargets(dmg, targets.length ? targets : null);
+          } else if (msg.type === 'playerPos') {
+            const id = msg.id; const xn = Number(msg.x);
+            if (!id || !Number.isFinite(xn)) return;
+            const entry = lobbyPlayers.get(id);
+            if (!entry || !entry.el) return;
+            const area = document.getElementById('characterArea'); if (!area) return;
+            const rect = area.getBoundingClientRect();
+            const px = (rect.width - 20) * Math.max(0, Math.min(1, xn)) + 10;
+            entry.el.style.left = px + 'px';
           } else if (msg.type === 'jackpotUpdate') {
             const next = Number(msg.jackpot) || 0;
             jackpot = Number(next.toFixed(2));
@@ -642,7 +667,14 @@
             if (name === selfName || pid === selfId) continue;
             const unit = document.createElement('div');
             unit.className = 'playerUnit';
-            unit.style.left = randomX() + 'px';
+            // Position using normalized x if provided, else random
+            const xn = Number(p.x);
+            if (Number.isFinite(xn)) {
+              const px = (areaRect.width - rectW) * Math.max(0, Math.min(1, xn)) + rectW/2;
+              unit.style.left = px + 'px';
+            } else {
+              unit.style.left = randomX() + 'px';
+            }
             // HP badge
             const hp = document.createElement('div');
             hp.className = 'hpBadge';
@@ -1043,6 +1075,13 @@
           const rectW = playerRectEl.getBoundingClientRect().width;
           const x = areaRect.width / 2;
           player.style.left = x + 'px';
+          // Share initial centered position with others
+          try {
+            if (wsConnected && ws) {
+              const xn = Math.max(0, Math.min(1, (x - rectW/2) / (areaRect.width - rectW)));
+              ws.send(JSON.stringify({ type: 'playerPos', x: xn }));
+            }
+          } catch {}
         }
         function toLocalX(evt){
           const areaRect = characterArea.getBoundingClientRect();
@@ -1059,6 +1098,15 @@
           const localX = toLocalX(e);
           const x = clamp(localX);
           player.style.left = x + 'px';
+          // Broadcast normalized position 0..1
+          try {
+            if (wsConnected && ws) {
+              const areaRect = characterArea.getBoundingClientRect();
+              const rectW = playerRectEl.getBoundingClientRect().width;
+              const xn = Math.max(0, Math.min(1, (x - rectW/2) / (areaRect.width - rectW)));
+              ws.send(JSON.stringify({ type: 'playerPos', x: xn }));
+            }
+          } catch {}
         };
         const end = ()=>{ dragging = false; document.removeEventListener('pointermove', move); };
         playerRectEl.addEventListener('pointerdown', start, { passive:false });
@@ -1252,7 +1300,9 @@
         let amountApplied = 0;
         let label = '';
         if (suit === 'spade') {
-          const dmg = isFace ? critDamage : v;
+          const base = isFace ? critDamage : v;
+          const mult = (stake >= 2 ? 2 : 1);
+          const dmg = Math.max(0, Math.floor(base * mult));
           amountApplied = dmg;
           label = 'Damage';
           if (wsConnected && ws) {
@@ -1333,7 +1383,9 @@
           }
           label = 'Heal';
         } else if (suit === 'club') {
-          const dmg = isFace ? critDamage : v;
+          const base = isFace ? critDamage : v;
+          const mult = (stake >= 2 ? 2 : 1);
+          const dmg = Math.max(0, Math.floor(base * mult));
           amountApplied = dmg;
           label = 'Damage';
           if (wsConnected && ws) {

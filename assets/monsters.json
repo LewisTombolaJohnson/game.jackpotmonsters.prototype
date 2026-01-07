@@ -4,49 +4,49 @@
     "image": "assets/tentacle_of_cthulu.png",
     "name": "Tentacle of Cthulu",
     "level": 1,
-    "health": 3000,
+    "health": 10000,
     "jackpotPercent": 3.5
   },
   {
     "image": "assets/monster.png",
     "name": "Tree Fiend",
     "level": 2,
-    "health": 5000,
+    "health": 25000,
     "jackpotPercent": 2.5
   },
   {
     "image": "assets/kappa.png",
     "name": "Kappa",
     "level": 3,
-    "health": 10000,
+    "health": 50000,
     "jackpotPercent": 3
   },
   {
     "image": "assets/giant.png",
     "name": "Giant",
     "level": 4,
-    "health": 15000,
+    "health": 100000,
     "jackpotPercent": 3
   },
   {
     "image": "assets/sea_monster.png",
     "name": "Sea Monster",
     "level": 5,
-    "health": 20000,
+    "health": 250000,
     "jackpotPercent": 2.5
   },
   {
     "image": "assets/cthulu.png",
     "name": "Cthulu",
     "level": 5,
-    "health": 30000,
+    "health": 500000,
     "jackpotPercent": 2
   },
   {
     "image": "assets/ice_monster.png",
     "name": "Ice Monster",
     "level": 6,
-    "health": 30000,
+    "health": 1000000,
     "jackpotPercent": 2
   }
 ]

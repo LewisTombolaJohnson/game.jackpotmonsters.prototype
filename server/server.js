@@ -10,7 +10,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 
 // Lobby state in-memory (consider Redis for multi-instance)
-// code -> { players: Map(ws -> {id,name}), started: bool, jackpot: number }
+// code -> { players: Map(ws -> {id,name,x}), started: bool, jackpot: number }
 const lobbies = new Map();
 const clients = new Map(); // ws -> { id, code, name }
 const nano = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 6);
@@ -98,6 +98,18 @@ wss.on('connection', (ws) => {
         lobby.jackpot = Number(((lobby.jackpot || 0) + amount).toFixed(2));
         broadcast(code, 'jackpotUpdate', { code, by: client.id, delta: amount, jackpot: lobby.jackpot });
       }
+    } else if (type === 'playerPos') {
+      const code = client.code; if (!code) return;
+      const lobby = lobbies.get(code); if (!lobby) return;
+      const x = Number(msg.x);
+      if (!Number.isFinite(x)) return;
+      // Clamp normalized position 0..1
+      const xn = Math.max(0, Math.min(1, x));
+      // Update stored position for this player
+      for (const [ws2, info] of lobby.players) {
+        if (info.id === client.id) { info.x = xn; break; }
+      }
+      broadcast(code, 'playerPos', { code, id: client.id, x: xn });
     } else if (type === 'jokerAttackRequest') {
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;
@@ -126,7 +138,7 @@ function ensureLobby(code) {
 function addPlayer(ws, client) {
   const lobby = lobbies.get(client.code);
   if (!lobby) return;
-  lobby.players.set(ws, { name: client.name, id: client.id });
+  lobby.players.set(ws, { name: client.name, id: client.id, x: 0.5 });
 }
 function removePlayer(ws) {
   const client = clients.get(ws);
