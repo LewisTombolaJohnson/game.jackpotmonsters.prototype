@@ -46,7 +46,7 @@
     "image": "assets/ice_monster.png",
     "name": "Ice Monster",
     "level": 6,
-    "health": 40000,
+    "health": 30000,
     "jackpotPercent": 2
   }
 ]

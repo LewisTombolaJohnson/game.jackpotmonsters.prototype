@@ -514,12 +514,10 @@
   let selfId = null;
   const lobbyPlayers = new Map(); // id -> { name, hp, el }
       function getDefaultWsUrl(){
-        const saved = localStorage.getItem('cc_ws_url');
-        if (saved) return saved;
+        // Always use Render in production; keep localhost for local development
         const host = location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') return 'ws://localhost:8080';
-        // If you deploy to Render, set cc_ws_url in localStorage to your public wss URL
-        return '';
+        return 'wss://card-combat-server.onrender.com';
       }
       function connectWS(url){
         if (!url) return;
