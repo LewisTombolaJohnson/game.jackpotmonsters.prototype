@@ -153,7 +153,13 @@ function removePlayer(ws) {
 function sendRoster(code) {
   const lobby = lobbies.get(code);
   if (!lobby) return;
-  const players = Array.from(lobby.players.values());
+  // Equal spacing: assign normalized x=(i+1)/(n+1) by join order
+  const infos = Array.from(lobby.players.values());
+  const n = infos.length;
+  for (let i = 0; i < n; i++) {
+    infos[i].x = (i + 1) / (n + 1);
+  }
+  const players = infos.map(p => ({ id: p.id, name: p.name, x: p.x }));
   broadcast(code, 'roster', { code, players });
 }
 
