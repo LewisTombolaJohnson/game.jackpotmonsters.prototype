@@ -461,6 +461,12 @@
       <!-- Monster zone (between progress bar and character area) -->
       <section id="monsterArea" aria-label="Monster area">
         <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
+        <!-- Defeat Banner -->
+        <div id="defeatBanner" style="display:none; position:absolute; inset:0; display:none; align-items:center; justify-content:center;">
+          <div style="background:rgba(2,6,23,0.85); color:#fde68a; border:1px solid rgba(148,163,184,0.35); border-radius:12px; padding:10px 16px; font-weight:800; letter-spacing:0.5px;">
+            Monster Defeated
+          </div>
+        </div>
         <button id="statsBtn" class="cornerBtn" aria-label="Stats" title="Stats">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3v18h18" />
@@ -490,6 +496,24 @@
       <section id="cards" aria-label="Player cards"></section>
       <div id="effects" aria-hidden="true"></div>
     </main>
+    <!-- Jackpot Modal -->
+    <section id="jackpotModal" class="overlay" style="display:none;" aria-label="Jackpot Awarded">
+      <div class="modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <h3 style="margin:0;">Jackpot Awarded!</h3>
+          <button id="closeJackpot" class="btn btn-ghost">Close</button>
+        </div>
+        <div style="text-align:center; margin:12px 0 4px;">
+          <div style="font-size:1.8rem; font-weight:900; color:#22c55e;" id="jackpotAwardAmount">£0</div>
+          <div style="opacity:0.8; margin-top:6px;">Congratulations!</div>
+        </div>
+        <div id="killSummary" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+          <div style="opacity:0.8;">Summary</div>
+          <div id="killAllocations"></div>
+          <ol id="killLeaderboard" style="margin:8px 0; padding-left:18px;"></ol>
+        </div>
+      </div>
+    </section>
     <!-- Stats Modal -->
     <section id="statsModal" class="overlay" style="display:none;" aria-label="Stats Modal">
       <div class="modal">
@@ -497,18 +521,35 @@
           <h3 style="margin:0;">Battle Stats</h3>
           <button id="closeStats" class="btn btn-ghost">Close</button>
         </div>
-        <div id="statsContent" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-          <div><strong>Heart Cards Drawn</strong><div id="statHearts">0</div></div>
-          <div><strong>Club Cards Drawn</strong><div id="statClubs">0</div></div>
-          <div><strong>Spade Cards Drawn</strong><div id="statSpades">0</div></div>
-          <div><strong>Diamond Cards Drawn</strong><div id="statDiamonds">0</div></div>
-          <div><strong>Prizes Won</strong><div id="statPrizes">£0</div></div>
-          <div><strong>Damage Dealt</strong><div id="statDamage">0</div></div>
+        <div id="statsContent" style="display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px;">
+          <div class="capsule"><span class="cap-label">Hearts</span><span id="statHearts" class="cap-value">0</span></div>
+          <div class="capsule"><span class="cap-label">Clubs</span><span id="statClubs" class="cap-value">0</span></div>
+          <div class="capsule"><span class="cap-label">Spades</span><span id="statSpades" class="cap-value">0</span></div>
+          <div class="capsule"><span class="cap-label">Diamonds</span><span id="statDiamonds" class="cap-value">0</span></div>
+          <div class="capsule"><span class="cap-label">Prizes</span><span id="statPrizes" class="cap-value">£0</span></div>
+          <div class="capsule"><span class="cap-label">Damage</span><span id="statDamage" class="cap-value">0</span></div>
         </div>
+        <style>
+          .capsule{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:rgba(2,6,23,0.8); border:1px solid rgba(148,163,184,0.25); }
+          .cap-label{ opacity:0.8; font-size:0.85rem; }
+          .cap-value{ font-weight:800; font-variant-numeric: tabular-nums; }
+          .lb-capsules{ display:flex; flex-wrap:wrap; gap:8px; }
+          .lb-item{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:rgba(2,6,23,0.8); border:1px solid rgba(148,163,184,0.25); min-width: 180px; }
+          .lb-pos{ width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:0.8rem; color:#0b1020; }
+          .lb-medal-1{ background: linear-gradient(135deg,#facc15,#f59e0b); }
+          .lb-medal-2{ background: linear-gradient(135deg,#cbd5e1,#94a3b8); }
+          .lb-medal-3{ background: linear-gradient(135deg,#f59e0b,#b45309); }
+          .lb-medal-n{ background:#94a3b8; color:#0b1020; }
+          .lb-name{ font-weight:600; opacity:0.95; }
+          .lb-dmg{ margin-left:auto; font-weight:800; font-variant-numeric: tabular-nums; }
+        </style>
         <hr style="opacity:0.3;"/>
-        <div>
-          <strong>Top 10 Damage (This Monster)</strong>
-          <ol id="leaderTop" style="margin:8px 0; padding-left:18px;"></ol>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <strong>Leaderboard (This Monster)</strong>
+            <div id="myRank" style="opacity:0.9;"></div>
+          </div>
+          <div id="leaderCaps" class="lb-capsules"></div>
         </div>
       </div>
     </section>
@@ -594,6 +635,46 @@
                   const xn = Number(p.x);
                   if (Number.isFinite(xn)) {
                     const px = (rect.width - 20) * Math.max(0, Math.min(1, xn)) + 10;
+          } else if (msg.type === 'jackpotAward') {
+            try {
+              if (typeof msg.total === 'number' && jackpotAwardAmount) {
+                jackpotAwardAmount.textContent = formatCurrency(msg.total);
+              }
+              // Allocations list
+              const allocWrap = document.getElementById('killAllocations');
+              if (allocWrap) {
+                allocWrap.innerHTML = '';
+                const allocs = Array.isArray(msg.allocations) ? msg.allocations : [];
+                for (const a of allocs) {
+                  const row = document.createElement('div');
+                  row.style.display = 'flex';
+                  row.style.justifyContent = 'space-between';
+                  row.style.gap = '8px';
+                  const nm = document.createElement('div');
+                  nm.textContent = a.name || a.id || 'Player';
+                  const am = document.createElement('div');
+                  am.textContent = formatCurrency(Number(a.amount)||0);
+                  am.style.fontWeight = '800';
+                  row.appendChild(nm); row.appendChild(am);
+                  allocWrap.appendChild(row);
+                }
+              }
+              // Final leaderboard top 10
+              const killTop = document.getElementById('killLeaderboard');
+              if (killTop) {
+                killTop.innerHTML = '';
+                const list = Array.isArray(msg.top) ? msg.top : [];
+                for (const it of list.slice(0, 10)) {
+                  const li = document.createElement('li');
+                  const nm = it.name || it.id || 'Player';
+                  const dmg = Number(it.damage)||0;
+                  li.textContent = `${nm} — ${dmg}`;
+                  killTop.appendChild(li);
+                }
+              }
+              // Ensure jackpot modal is visible
+              if (jackpotModal) jackpotModal.style.display = 'grid';
+            } catch {}
                     entry.el.style.left = px + 'px';
                   }
                 }
@@ -618,6 +699,7 @@
               progressFill.style.width = `${pct * 100}%`;
               progressLabel.textContent = `${progress} / ${goal}`;
               monsterFeedback('damage');
+              if (progress <= 0) { showDefeatSequence(); }
               // Show damage particles from the acting player's avatar (if not self-triggered already)
               try {
                 const suit = msg.suit === 'club' ? 'club' : (msg.suit === 'spade' ? 'spade' : null);
@@ -658,20 +740,46 @@
               const pct = goal > 0 ? (progress / goal) : 0;
               progressFill.style.width = `${pct * 100}%`;
               progressLabel.textContent = `${progress} / ${goal}`;
+              if (progress <= 0) { showDefeatSequence(); }
             }
           } else if (msg.type === 'stats') {
-            // Populate leaderboard
+            // Populate leaderboard capsules (always 10 entries)
             try {
-              if (leaderTop) {
-                leaderTop.innerHTML = '';
+              const wrap = document.getElementById('leaderCaps');
+              if (wrap) {
+                wrap.innerHTML = '';
                 const list = Array.isArray(msg.top) ? msg.top : (Array.isArray(msg.entries) ? msg.entries : []);
-                for (const it of list.slice(0, 10)) {
-                  const li = document.createElement('li');
-                  const nm = it.name || it.id || 'Player';
-                  const dmg = Number(it.damage)||0;
-                  li.textContent = `${nm} — ${dmg}`;
-                  leaderTop.appendChild(li);
+                for (let i = 0; i < 10; i++) {
+                  const it = list[i];
+                  const pos = i + 1;
+                  const item = document.createElement('div'); item.className = 'lb-item';
+                  const posEl = document.createElement('div'); posEl.className = 'lb-pos ' + (pos===1?'lb-medal-1':pos===2?'lb-medal-2':pos===3?'lb-medal-3':'lb-medal-n'); posEl.textContent = String(pos);
+                  const nameEl = document.createElement('div'); nameEl.className = 'lb-name'; nameEl.textContent = it ? (it.name || it.id || 'Player') : '—';
+                  const dmgEl = document.createElement('div'); dmgEl.className = 'lb-dmg'; dmgEl.textContent = it ? String(Number(it.damage)||0) : '0';
+                  item.appendChild(posEl); item.appendChild(nameEl); item.appendChild(dmgEl);
+                  wrap.appendChild(item);
                 }
+              }
+            } catch {}
+          } else if (msg.type === 'leaderboardUpdate') {
+            try {
+              const list = Array.isArray(msg.top) ? msg.top : [];
+              const wrap = document.getElementById('leaderCaps');
+              if (wrap) {
+                wrap.innerHTML = '';
+                for (let i = 0; i < 10; i++) {
+                  const it = list[i]; const pos = i+1;
+                  const item = document.createElement('div'); item.className = 'lb-item';
+                  const posEl = document.createElement('div'); posEl.className = 'lb-pos ' + (pos===1?'lb-medal-1':pos===2?'lb-medal-2':pos===3?'lb-medal-3':'lb-medal-n'); posEl.textContent = String(pos);
+                  const nameEl = document.createElement('div'); nameEl.className = 'lb-name'; nameEl.textContent = it ? (it.name || it.id || 'Player') : '—';
+                  const dmgEl = document.createElement('div'); dmgEl.className = 'lb-dmg'; dmgEl.textContent = it ? String(Number(it.damage)||0) : '0';
+                  item.appendChild(posEl); item.appendChild(nameEl); item.appendChild(dmgEl);
+                  wrap.appendChild(item);
+                }
+              }
+              const upd = msg.updated;
+              if (upd && myRankEl) {
+                myRankEl.textContent = `You: #${upd.rank || 0} • ${upd.total || 0} dmg`;
               }
             } catch {}
           }
@@ -954,6 +1062,17 @@
             if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'debugSetHealth', health: 100 })); } catch {} }
             else { progress = Math.min(goal, 100); const pct = goal>0 ? progress/goal : 0; progressFill.style.width = `${pct*100}%`; progressLabel.textContent = `${progress} / ${goal}`; }
           });
+          // Alt-click triggers a jackpot award broadcast for testing
+          debugBtn?.addEventListener('click', (e)=>{
+            if (!e.altKey) return;
+            if (!(selfId && ownerId && String(selfId) === String(ownerId))) return;
+            if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'debugAwardJackpot' })); } catch {} }
+          });
+        } catch {}
+        // Jackpot modal wiring
+        try {
+          closeJackpot?.addEventListener('click', ()=>{ if (jackpotModal) jackpotModal.style.display = 'none'; });
+          jackpotModal?.addEventListener('click', (e)=>{ if (e.target === jackpotModal) jackpotModal.style.display = 'none'; });
         } catch {}
       });
 
@@ -974,6 +1093,7 @@
   const statsModal = document.getElementById('statsModal');
   const closeStats = document.getElementById('closeStats');
   const leaderTop = document.getElementById('leaderTop');
+  const myRankEl = document.getElementById('myRank');
   const recycleBtn = document.getElementById('recycleBtn');
   const playerHpEl = document.getElementById('playerHp');
   // Track the currently selected monster for jackpot contributions
@@ -1027,6 +1147,38 @@
         if (!jackpotEl) return;
         const text = `${formatCurrency(jackpot)}`;
         jackpotEl.textContent = text;
+      }
+      // Defeat UX elements and state
+      const defeatBanner = document.getElementById('defeatBanner');
+      const jackpotModal = document.getElementById('jackpotModal');
+      const closeJackpot = document.getElementById('closeJackpot');
+      const jackpotAwardAmount = document.getElementById('jackpotAwardAmount');
+      let monsterDefeated = false;
+      function showDefeatSequence(){
+        const img = document.getElementById('monsterSprite');
+        if (!img || monsterDefeated) return;
+        monsterDefeated = true;
+        try {
+          const fade = img.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, easing: 'ease' });
+          fade.finished.then(()=>{ img.style.opacity = '0'; }).catch(()=>{ img.style.opacity = '0'; });
+        } catch { img.style.transition = 'opacity 700ms ease'; img.style.opacity = '0'; }
+        if (defeatBanner) {
+          defeatBanner.style.display = 'flex';
+          try { defeatBanner.animate([{ opacity: 0, transform: 'scale(0.98)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 280, easing: 'ease-out', fill: 'forwards' }); }
+          catch { defeatBanner.style.opacity = '1'; }
+        }
+        setTimeout(()=>{
+          if (jackpotModal) {
+            if (jackpotAwardAmount) jackpotAwardAmount.textContent = formatCurrency(jackpot);
+            jackpotModal.style.display = 'grid';
+          }
+        }, 800);
+      }
+      function resetDefeatUX(){
+        const img = document.getElementById('monsterSprite');
+        if (img) img.style.opacity = '1';
+        if (defeatBanner) { defeatBanner.style.display = 'none'; defeatBanner.style.opacity = '0'; }
+        monsterDefeated = false;
       }
       function updatePlayerHp(){ if (playerHpEl) playerHpEl.textContent = `${playerHp} / ${playerMaxHp}`; }
       updateStakeDisplay();
@@ -1430,6 +1582,7 @@
             progress = Math.max(0, progress - dmg);
             monsterFeedback('damage');
           }
+          if (progress <= 0) { showDefeatSequence(); }
         } else if (suit === 'diamond') {
           // Face card multipliers; numbers use value/10
           const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
@@ -1531,6 +1684,7 @@
             progress = Math.max(0, progress - dmg);
             monsterFeedback('damage');
           }
+          if (progress <= 0) { showDefeatSequence(); }
         }
         const pct = progress / goal;
         progressFill.style.width = `${pct * 100}%`;

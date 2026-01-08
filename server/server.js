@@ -106,6 +106,13 @@ wss.on('connection', (ws) => {
           const board = lobby.leaderboards.get(lobby.currentMonster);
           const prev = Number(board.get(client.id) || 0);
           board.set(client.id, prev + amount);
+          // Compute live leaderboard update
+          const entries = Array.from(board.entries()).map(([id, damage])=>({ id, damage: Number(damage)||0, name: findNameById(lobby, id) }));
+          entries.sort((a,b)=> b.damage - a.damage);
+          const top10 = entries.slice(0, 10);
+          const updatedTotal = prev + amount;
+          const rank = entries.findIndex(e => e.id === client.id) + 1;
+          broadcast(code, 'leaderboardUpdate', { code, top: top10, updated: { id: client.id, name: client.name, total: updatedTotal, rank } });
         }
         broadcast(code, 'damageMonster', { code, by: client.id, amount, suit });
       }
@@ -163,6 +170,35 @@ wss.on('connection', (ws) => {
       if (lobby.ownerId && lobby.ownerId === client.id) {
         const value = Math.max(0, Number(msg.health) || 100);
         broadcast(code, 'setMonsterHealth', { code, health: value });
+      }
+    } else if (type === 'debugAwardJackpot') {
+      // Owner-only path to simulate end-of-kill award broadcast
+      const code = client.code; if (!code) return;
+      const lobby = lobbies.get(code); if (!lobby) return;
+      if (lobby.ownerId && lobby.ownerId === client.id) {
+        const key = lobby.currentMonster || 'default';
+        if (!lobby.leaderboards) lobby.leaderboards = new Map();
+        const board = (lobby.leaderboards.get(key) || new Map());
+        const entries = Array.from(board.entries()).map(([id, damage])=>({ id, damage: Number(damage)||0, name: findNameById(lobby, id) }));
+        entries.sort((a,b)=> b.damage - a.damage);
+        // Compute a simple split: 50%/20%/10% to top3, 20% pro-rata to others
+        const totalJackpot = Number((lobby.jackpot || 0).toFixed(2));
+        const top3 = entries.slice(0,3);
+        const others = entries.slice(3);
+        const allocations = [];
+        function pushAlloc(e, amount){ if (!e || amount<=0) return; allocations.push({ id: e.id, name: e.name, amount: Number(amount.toFixed(2)) }); }
+        if (totalJackpot > 0) {
+          pushAlloc(top3[0], totalJackpot * 0.50);
+          pushAlloc(top3[1], totalJackpot * 0.20);
+          pushAlloc(top3[2], totalJackpot * 0.10);
+          const rem = totalJackpot * 0.20;
+          const sumOthers = others.reduce((s,e)=> s + e.damage, 0) || 1;
+          for (const e of others) pushAlloc(e, rem * (e.damage / sumOthers));
+        }
+        broadcast(code, 'jackpotAward', { code, total: totalJackpot, allocations, top: entries.slice(0,10) });
+        // Optionally reset jackpot to base and clear leaderboard for next monster
+        lobby.jackpot = 1000;
+        if (lobby.leaderboards) lobby.leaderboards.set(key, new Map());
       }
     } else if (type === 'jokerAttackRequest') {
       const code = client.code; if (!code) return;
