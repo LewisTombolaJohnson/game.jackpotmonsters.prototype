@@ -274,6 +274,10 @@
           /* Move cards down by half of their height (≈98px for 140px width at 2.5:3.5 ratio) */
           bottom: calc(var(--cabinet-height) - 98px);
         }
+        /* Sit the character area directly above the cards on desktop */
+        #characterArea {
+          bottom: calc(var(--cabinet-height) + (var(--cards-height) - 98px));
+        }
         .card { width: 140px; }
       }
       /* Overlay + Modal for menus/lobbies */
