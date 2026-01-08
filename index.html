@@ -122,8 +122,8 @@
         filter: drop-shadow(0 10px 24px rgba(0,0,0,0.5));
         pointer-events: none; /* image itself not clickable */
       }
-      /* Recycle overlay button */
-      #recycleBtn {
+      /* Corner buttons (stats/debug) */
+      .cornerBtn {
         position: absolute;
         top: 12px;
         right: 12px;
@@ -139,8 +139,10 @@
         z-index: 2;
         box-shadow: 0 6px 14px rgba(0,0,0,0.35);
       }
-      #recycleBtn:active { transform: translateY(1px); }
-      #recycleBtn svg { width: 22px; height: 22px; opacity: 0.9; }
+      .cornerBtn:active { transform: translateY(1px); }
+      .cornerBtn svg { width: 22px; height: 22px; opacity: 0.9; }
+      /* Debug button stacks under stats with small offset */
+      #debugBtn { top: 58px; }
       /* Character area (10% height) above the cards */
       #characterArea {
         position: absolute;
@@ -459,11 +461,20 @@
       <!-- Monster zone (between progress bar and character area) -->
       <section id="monsterArea" aria-label="Monster area">
         <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
-        <button id="recycleBtn" aria-label="Change Monster" title="Change Monster">
+        <button id="statsBtn" class="cornerBtn" aria-label="Stats" title="Stats">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.37 4.36A9 9 0 0020.49 15" />
+            <path d="M3 3v18h18" />
+            <rect x="7" y="13" width="3" height="5" />
+            <rect x="12" y="9" width="3" height="9" />
+            <rect x="17" y="5" width="3" height="13" />
+          </svg>
+        </button>
+        <button id="debugBtn" class="cornerBtn" aria-label="Debug" title="Debug" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3v4M16 3v4" />
+            <path d="M4 11h16" />
+            <path d="M4 19h16" />
+            <path d="M7 11v8m10-8v8" />
           </svg>
         </button>
       </section>
@@ -479,6 +490,28 @@
       <section id="cards" aria-label="Player cards"></section>
       <div id="effects" aria-hidden="true"></div>
     </main>
+    <!-- Stats Modal -->
+    <section id="statsModal" class="overlay" style="display:none;" aria-label="Stats Modal">
+      <div class="modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <h3 style="margin:0;">Battle Stats</h3>
+          <button id="closeStats" class="btn btn-ghost">Close</button>
+        </div>
+        <div id="statsContent" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div><strong>Heart Cards Drawn</strong><div id="statHearts">0</div></div>
+          <div><strong>Club Cards Drawn</strong><div id="statClubs">0</div></div>
+          <div><strong>Spade Cards Drawn</strong><div id="statSpades">0</div></div>
+          <div><strong>Diamond Cards Drawn</strong><div id="statDiamonds">0</div></div>
+          <div><strong>Prizes Won</strong><div id="statPrizes">£0</div></div>
+          <div><strong>Damage Dealt</strong><div id="statDamage">0</div></div>
+        </div>
+        <hr style="opacity:0.3;"/>
+        <div>
+          <strong>Top 10 Damage (This Monster)</strong>
+          <ol id="leaderTop" style="margin:8px 0; padding-left:18px;"></ol>
+        </div>
+      </div>
+    </section>
     <footer class="cabinet" aria-label="Controls cabinet">
       <div class="metric" id="balance">
         <span class="label">Balance</span>
@@ -566,6 +599,11 @@
                 }
               }
             } catch {}
+            // Owner-only debug button toggle
+            try {
+              ownerId = msg.ownerId || null;
+              if (debugBtn) debugBtn.style.display = (selfId && ownerId && String(ownerId) === String(selfId)) ? 'block' : 'none';
+            } catch {}
           } else if (msg.type === 'jackpotState') {
             const value = Number(msg.jackpot) || 0;
             jackpot = Number(value.toFixed(2));
@@ -580,10 +618,17 @@
               progressFill.style.width = `${pct * 100}%`;
               progressLabel.textContent = `${progress} / ${goal}`;
               monsterFeedback('damage');
+              // Show damage particles from the acting player's avatar (if not self-triggered already)
+              try {
+                const suit = msg.suit === 'club' ? 'club' : (msg.suit === 'spade' ? 'spade' : null);
+                const by = msg.by;
+                if (suit && by) spawnParticlesFromPlayerById(by, suit);
+              } catch {}
             }
           } else if (msg.type === 'healPlayer') {
             const { id, amount } = msg; if (!id) return;
             applyHealToPlayer(id, Number(amount)||0);
+            spawnHeartRingForPlayer(id);
           } else if (msg.type === 'jokerAttack') {
             const dmg = Math.max(1, Number(msg.damage)||1);
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
@@ -602,6 +647,33 @@
             const next = Number(msg.jackpot) || 0;
             jackpot = Number(next.toFixed(2));
             updateJackpotDisplay();
+          } else if (msg.type === 'heartHeal') {
+            const healAmt = Math.max(0, Number(msg.amount)||0);
+            const targets = Array.isArray(msg.targets) ? msg.targets : [];
+            for (const id of targets) { applyHealToPlayer(id, healAmt); spawnHeartRingForPlayer(id); }
+          } else if (msg.type === 'setMonsterHealth') {
+            const h = Number(msg.health);
+            if (Number.isFinite(h)) {
+              progress = Math.max(0, Math.min(goal, Math.floor(h)));
+              const pct = goal > 0 ? (progress / goal) : 0;
+              progressFill.style.width = `${pct * 100}%`;
+              progressLabel.textContent = `${progress} / ${goal}`;
+            }
+          } else if (msg.type === 'stats') {
+            // Populate leaderboard
+            try {
+              if (leaderTop) {
+                leaderTop.innerHTML = '';
+                const list = Array.isArray(msg.top) ? msg.top : (Array.isArray(msg.entries) ? msg.entries : []);
+                for (const it of list.slice(0, 10)) {
+                  const li = document.createElement('li');
+                  const nm = it.name || it.id || 'Player';
+                  const dmg = Number(it.damage)||0;
+                  li.textContent = `${nm} — ${dmg}`;
+                  leaderTop.appendChild(li);
+                }
+              }
+            } catch {}
           }
         });
       }
@@ -864,6 +936,25 @@
             addPlayerToLobby(code, selfName);
           }
         } else { showMenu(); }
+        // Wire stats modal and debug after initial DOM ready
+        try {
+          statsBtn?.addEventListener('click', ()=>{
+            if (statsModal) statsModal.style.display = 'grid';
+            // Request latest stats from server
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'getStats' })); } catch {}
+            }
+          });
+          closeStats?.addEventListener('click', ()=>{ if (statsModal) statsModal.style.display = 'none'; });
+          // Click outside to close
+          statsModal?.addEventListener('click', (e)=>{ if (e.target === statsModal) statsModal.style.display = 'none'; });
+          // Owner-only debug action: set monster health to 100
+          debugBtn?.addEventListener('click', ()=>{
+            if (!(selfId && ownerId && String(selfId) === String(ownerId))) return;
+            if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'debugSetHealth', health: 100 })); } catch {} }
+            else { progress = Math.min(goal, 100); const pct = goal>0 ? progress/goal : 0; progressFill.style.width = `${pct*100}%`; progressLabel.textContent = `${progress} / ${goal}`; }
+          });
+        } catch {}
       });
 
       // Minimal interaction scaffold
@@ -878,6 +969,11 @@
   const player = document.getElementById('player');
   const playerRectEl = document.getElementById('playerRect');
   const jackpotEl = document.getElementById('jackpot');
+  const statsBtn = document.getElementById('statsBtn');
+  const debugBtn = document.getElementById('debugBtn');
+  const statsModal = document.getElementById('statsModal');
+  const closeStats = document.getElementById('closeStats');
+  const leaderTop = document.getElementById('leaderTop');
   const recycleBtn = document.getElementById('recycleBtn');
   const playerHpEl = document.getElementById('playerHp');
   // Track the currently selected monster for jackpot contributions
@@ -894,6 +990,23 @@
       let stake = stakeSteps[stakeIndex];
   const playerMaxHp = 50;
   let playerHp = playerMaxHp;
+  // Stats counters (local)
+  let statHearts = 0;
+  let statClubs = 0;
+  let statSpades = 0;
+  let statDiamonds = 0;
+  let statPrizes = 0; // currency total
+  let statDamage = 0; // total damage dealt
+  function updateStatsCounters(){
+    const h = document.getElementById('statHearts'); if (h) h.textContent = String(statHearts);
+    const c = document.getElementById('statClubs'); if (c) c.textContent = String(statClubs);
+    const s = document.getElementById('statSpades'); if (s) s.textContent = String(statSpades);
+    const d = document.getElementById('statDiamonds'); if (d) d.textContent = String(statDiamonds);
+    const p = document.getElementById('statPrizes'); if (p) p.textContent = formatCurrency(statPrizes);
+    const dm = document.getElementById('statDamage'); if (dm) dm.textContent = String(statDamage);
+  }
+  // Owner id from server (roster)
+  let ownerId = null;
 
       const stakeMinusBtn = document.getElementById('stakeMinus');
       const stakePlusBtn = document.getElementById('stakePlus');
@@ -1310,8 +1423,9 @@
           const dmg = Math.max(0, Math.floor(base * mult));
           amountApplied = dmg;
           label = 'Damage';
+          statSpades++; statDamage += dmg; updateStatsCounters();
           if (wsConnected && ws) {
-            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg })); } catch {}
+            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg, suit: 'spade' })); } catch {}
           } else {
             progress = Math.max(0, progress - dmg);
             monsterFeedback('damage');
@@ -1337,6 +1451,7 @@
           prize = Number((prize + turnPrize).toFixed(2));
           prizeEl.textContent = formatCurrency(prize);
           label = 'Prize';
+          statDiamonds++; statPrizes = Number((statPrizes + turnPrize).toFixed(2)); updateStatsCounters();
         } else if (suit === 'joker') {
           // Joker triggers a monster attack on a random subset of players
           label = 'Attack';
@@ -1379,11 +1494,27 @@
           }
           const healPoints = Math.max(0, Math.round(healValueCurrency));
           amountApplied = healPoints;
+          statHearts++; updateStatsCounters();
           if (healPoints > 0) {
-            if (wsConnected && ws) {
-              try { ws.send(JSON.stringify({ type: 'healPlayer', id: selfId || 'self', amount: healPoints })); } catch {}
+            const faceCount = rankText === 'J' ? 3 : rankText === 'Q' ? 6 : rankText === 'K' ? 9 : 0;
+            if (faceCount > 0) {
+              if (wsConnected && ws) {
+                try { ws.send(JSON.stringify({ type: 'heartHealRequest', amount: healPoints, count: faceCount })); } catch {}
+              } else {
+                // Local fallback: random subset
+                let ids = Array.from(lobbyPlayers.keys());
+                if (ids.length === 0) ids = [selfId || 'self'];
+                for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+                const targets = ids.slice(0, Math.min(faceCount, ids.length));
+                for (const id of targets) { applyHealToPlayer(id, healPoints); spawnHeartRingForPlayer(id); }
+              }
             } else {
-              applyHealToPlayer(selfId || 'self', healPoints);
+              if (wsConnected && ws) {
+                try { ws.send(JSON.stringify({ type: 'healPlayer', id: selfId || 'self', amount: healPoints })); } catch {}
+              } else {
+                applyHealToPlayer(selfId || 'self', healPoints);
+                spawnHeartRingForPlayer(selfId || 'self');
+              }
             }
           }
           label = 'Heal';
@@ -1393,8 +1524,9 @@
           const dmg = Math.max(0, Math.floor(base * mult));
           amountApplied = dmg;
           label = 'Damage';
+          statClubs++; statDamage += dmg; updateStatsCounters();
           if (wsConnected && ws) {
-            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg })); } catch {}
+            try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg, suit: 'club' })); } catch {}
           } else {
             progress = Math.max(0, progress - dmg);
             monsterFeedback('damage');
@@ -1427,6 +1559,50 @@
           img.classList.add('healTint');
           setTimeout(() => img.classList.remove('healTint'), 520);
         }
+      }
+
+      // Spawn a green healing ring for a given player's avatar (self or remote)
+      function spawnHeartRingForPlayer(id){
+        try {
+          const entry = lobbyPlayers.get(id);
+          const gameEl = document.getElementById('game');
+          const effectsEl = document.getElementById('effects');
+          if (!entry || !entry.el || !gameEl || !effectsEl) return;
+          const rectEl = entry.el.querySelector('#playerRect') || entry.el.querySelector('.playerRect');
+          if (!rectEl) return;
+          const rect = rectEl.getBoundingClientRect();
+          const gameRect = gameEl.getBoundingClientRect();
+          const cx = rect.left - gameRect.left + rect.width / 2;
+          const cy = rect.top - gameRect.top + rect.height / 2;
+          const p = document.createElement('div');
+          p.className = 'particle';
+          p.style.position = 'absolute';
+          p.style.left = cx + 'px';
+          p.style.top = cy + 'px';
+          p.style.pointerEvents = 'none';
+          p.style.willChange = 'transform, opacity';
+          const size = Math.max(rect.width, rect.height) * 1.2;
+          p.style.width = size + 'px';
+          p.style.height = size + 'px';
+          p.style.border = '3px solid #22c55e';
+          p.style.borderRadius = '50%';
+          p.style.background = 'transparent';
+          (effectsEl).appendChild(p);
+          try {
+            const anim = p.animate([
+              { transform: 'translate(-50%, -50%) scale(0.8)', opacity: 0.9 },
+              { transform: 'translate(-50%, -50%) scale(2.4)', opacity: 0 }
+            ], { duration: 750, easing: 'ease-out', fill: 'forwards' });
+            anim.finished.then(()=> p.remove()).catch(()=> p.remove());
+          } catch {
+            p.style.transition = 'transform 750ms ease-out, opacity 750ms ease-out';
+            requestAnimationFrame(()=>{
+              p.style.transform = 'translate(-50%, -50%) scale(2.4)';
+              p.style.opacity = '0';
+              setTimeout(()=> p.remove(), 780);
+            });
+          }
+        } catch {}
       }
 
       // Particle effects per suit — emitted from PLAYER rectangle
@@ -1557,6 +1733,131 @@
             });
           }
         }
+      }
+
+      // Spawn particles from a specific player's avatar by id (e.g., remote player's damage)
+      function spawnParticlesFromPlayerById(id, suit){
+        try {
+          const entry = lobbyPlayers.get(id);
+          const gameEl = document.getElementById('game');
+          const effectsEl = document.getElementById('effects');
+          if (!entry || !entry.el || !gameEl || !effectsEl) return;
+          const rectEl = entry.el.querySelector('#playerRect') || entry.el.querySelector('.playerRect');
+          const prizeMetric = document.querySelector('#prize .value');
+          if (!rectEl) return;
+          const rect = rectEl.getBoundingClientRect();
+          const gameRect = gameEl.getBoundingClientRect();
+          const originX = rect.left - gameRect.left + rect.width / 2;
+          const originY = rect.top - gameRect.top + 2;
+          const targetXTop = gameRect.width / 2;
+          const targetYTop = 8;
+          const count = suit === 'diamond' ? 14 : suit === 'heart' ? 1 : 12;
+          for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.position = 'absolute';
+            p.style.left = originX + 'px';
+            p.style.top = originY + 'px';
+            p.style.pointerEvents = 'none';
+            p.style.willChange = 'transform, opacity';
+            let keyframes, duration, easing;
+            switch (suit) {
+              case 'spade': {
+                const dx = (targetXTop - originX) * (0.85 + Math.random() * 0.25);
+                const dy = (originY - targetYTop) * (0.9 + Math.random() * 0.2);
+                const size = 6 + Math.random() * 6;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.borderRadius = '50%';
+                p.style.background = '#ff4d9d';
+                keyframes = [
+                  { transform: 'translate(0, 0)', opacity: 1 },
+                  { transform: `translate(${dx}px, -${dy}px)`, opacity: 0 }
+                ];
+                duration = 600 + Math.random() * 300;
+                easing = 'ease-out';
+                break;
+              }
+              case 'diamond': {
+                let targetX = targetXTop;
+                let targetY = gameRect.height - 24;
+                if (prizeMetric) {
+                  const prizeRect = prizeMetric.getBoundingClientRect();
+                  targetX = prizeRect.left - gameRect.left + prizeRect.width / 2;
+                  targetY = prizeRect.top - gameRect.top + prizeRect.height / 2;
+                }
+                const size = 12 + Math.random() * 6;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.borderRadius = '50%';
+                p.style.background = 'radial-gradient(circle at 35% 35%, #ffe08a 0%, #facc15 55%, #d97706 100%)';
+                p.style.boxShadow = '0 0 8px rgba(250, 204, 21, 0.8)';
+                const dx = (targetX - originX) * (0.9 + Math.random() * 0.2);
+                const dy = (targetY - originY) * (0.85 + Math.random() * 0.3);
+                keyframes = [
+                  { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                  { transform: `translate(${dx * 0.5}px, ${dy * 0.5}px) scale(1.05)`, opacity: 0.95 },
+                  { transform: `translate(${dx}px, ${dy}px) scale(0.98)`, opacity: 0 }
+                ];
+                duration = 900 + Math.random() * 400;
+                easing = 'ease-in-out';
+                break;
+              }
+              case 'heart': {
+                const cx = rect.left - gameRect.left + rect.width / 2;
+                const cy = rect.top - gameRect.top + rect.height / 2;
+                p.style.left = cx + 'px';
+                p.style.top = cy + 'px';
+                const size = Math.max(rect.width, rect.height) * 1.2;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.border = '3px solid #22c55e';
+                p.style.borderRadius = '50%';
+                p.style.background = 'transparent';
+                keyframes = [
+                  { transform: 'translate(-50%, -50%) scale(0.8)', opacity: 0.9 },
+                  { transform: 'translate(-50%, -50%) scale(2.4)', opacity: 0 }
+                ];
+                duration = 750;
+                easing = 'ease-out';
+                break;
+              }
+              case 'club':
+              default: {
+                const dy = (originY - targetYTop);
+                const amp = 14 + Math.random() * 8;
+                const size = 5 + Math.random() * 4;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.borderRadius = '50%';
+                p.style.background = '#ffffff';
+                keyframes = [
+                  { transform: 'translate(0, 0)', opacity: 1 },
+                  { transform: `translate(${(targetXTop-originX)*0.25 + amp}px, -${dy * 0.25}px)`, opacity: 0.95 },
+                  { transform: `translate(${(targetXTop-originX)*0.5 - amp}px, -${dy * 0.5}px)`, opacity: 0.8 },
+                  { transform: `translate(${(targetXTop-originX)*0.75 + amp}px, -${dy * 0.75}px)`, opacity: 0.6 },
+                  { transform: `translate(${(targetXTop-originX)}px, -${dy}px)`, opacity: 0 }
+                ];
+                duration = 900 + Math.random() * 300;
+                easing = 'ease-in-out';
+                break;
+              }
+            }
+            effectsEl.appendChild(p);
+            try {
+              const anim = p.animate(keyframes, { duration, easing, fill: 'forwards' });
+              anim.finished.then(() => p.remove()).catch(() => p.remove());
+            } catch {
+              p.style.transition = `transform ${duration}ms ${easing}, opacity ${duration}ms ${easing}`;
+              const last = keyframes[keyframes.length - 1];
+              requestAnimationFrame(() => {
+                p.style.transform = last.transform || '';
+                p.style.opacity = last.opacity != null ? String(last.opacity) : '0';
+                setTimeout(() => p.remove(), duration + 20);
+              });
+            }
+          }
+        } catch {}
       }
     </script>
   </body>
