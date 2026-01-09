@@ -547,6 +547,9 @@
           <div style="font-size:1.8rem; font-weight:900; color:#22c55e;" id="jackpotAwardAmount">£0</div>
           <div style="opacity:0.8; margin-top:6px;">Congratulations!</div>
         </div>
+            <div style="opacity:0.85; font-size:0.9rem;">
+              This will be functional once I know what the heck I plan to do with the jackpot
+            </div>
         <div id="killSummary" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
           <div style="opacity:0.8;">Summary</div>
           <div id="killAllocations"></div>
@@ -735,6 +738,49 @@
             const dmg = Math.max(1, Number(msg.damage)||1);
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
             showMonsterAttackOverlay();
+            // For each hit player, spawn purple particles from monster to them
+            try {
+              const sprite = document.getElementById('monsterSprite');
+              const effects = document.getElementById('effects');
+              if (sprite && effects) {
+                const rectM = sprite.getBoundingClientRect();
+                for (const id of targets) {
+                  const unit = id === (selfId || 'self') ? document.getElementById('player') : document.querySelector(`[data-player-id="${id}"]`);
+                  if (!unit) continue;
+                  const rectU = unit.getBoundingClientRect();
+                  const startX = rectM.left + rectM.width / 2;
+                  const startY = rectM.top + rectM.height * 0.3;
+                  const endX = rectU.left + rectU.width / 2;
+                  const endY = rectU.top + 10;
+                  for (let i = 0; i < 12; i++) {
+                    const p = document.createElement('div');
+                    p.style.position = 'fixed';
+                    p.style.left = `${startX}px`;
+                    p.style.top = `${startY}px`;
+                    p.style.width = '6px';
+                    p.style.height = '6px';
+                    p.style.borderRadius = '999px';
+                    p.style.background = '#a21caf'; // purple
+                    p.style.boxShadow = '0 0 8px rgba(162,28,175,0.8)';
+                    p.style.opacity = '0.95';
+                    effects.appendChild(p);
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+                    const jitterX = (Math.random() - 0.5) * 20;
+                    const jitterY = (Math.random() - 0.5) * 10;
+                    const keyframes = [
+                      { transform: 'translate(0,0)', opacity: 0.9 },
+                      { transform: `translate(${dx * 0.6 + jitterX}px, ${dy * 0.6 + jitterY}px)`, opacity: 1 },
+                      { transform: `translate(${dx}px, ${dy}px)`, opacity: 0 }
+                    ];
+                    const duration = 520 + Math.random() * 280;
+                    const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+                    const anim = p.animate(keyframes, { duration, easing, fill: 'forwards' });
+                    anim.finished.catch(()=>{}).finally(()=>{ p.remove(); });
+                  }
+                }
+              }
+            } catch {}
             applyJokerDamageToTargets(dmg, targets.length ? targets : null);
           } else if (msg.type === 'playerPos') {
             const id = msg.id; const xn = Number(msg.x);
@@ -1233,7 +1279,8 @@
       const jackpotModal = document.getElementById('jackpotModal');
       const closeJackpot = document.getElementById('closeJackpot');
       const jackpotAwardAmount = document.getElementById('jackpotAwardAmount');
-      let monsterDefeated = false;
+  let monsterDefeated = false;
+  let defeatCountdownTimer = null;
       function showDefeatSequence(){
         const img = document.getElementById('monsterSprite');
         if (!img || monsterDefeated) return;
@@ -1253,11 +1300,61 @@
             jackpotModal.style.display = 'grid';
           }
         }, 800);
+        // Start a 10s countdown to next monster
+        const header = document.querySelector('header.progress-wrap');
+        const countdown = document.createElement('div');
+        countdown.id = 'defeatCountdown';
+        countdown.style.position = 'absolute';
+        countdown.style.top = '6px';
+        countdown.style.right = '12px';
+        countdown.style.background = 'rgba(2,6,23,0.8)';
+        countdown.style.border = '1px solid rgba(148,163,184,0.35)';
+        countdown.style.borderRadius = '999px';
+        countdown.style.padding = '4px 10px';
+        countdown.style.fontWeight = '800';
+        countdown.style.fontSize = '0.85rem';
+        countdown.style.color = '#fde68a';
+        countdown.textContent = 'Next monster in 10s';
+        header?.appendChild(countdown);
+        let remaining = 10;
+        defeatCountdownTimer = setInterval(async ()=>{
+          remaining -= 1;
+          if (countdown) countdown.textContent = `Next monster in ${remaining}s`;
+          if (remaining <= 0) {
+            clearInterval(defeatCountdownTimer); defeatCountdownTimer = null;
+            countdown?.remove();
+            // Move to a random monster (next level) and replenish all players to full
+            try {
+              const currentSrc = img.getAttribute('src');
+              const nextMonster = await pickRandomMonsterFromJson(currentSrc);
+              if (nextMonster && nextMonster.image) {
+                const nextLevel = Number((Number(nextMonster.level) || 1) + 1);
+                img.setAttribute('src', String(nextMonster.image));
+                if (nextMonster.name) img.setAttribute('alt', String(nextMonster.name));
+                currentMonster = { ...nextMonster, level: nextLevel };
+                updateMonsterUI({ level: nextLevel, health: Number(nextMonster.health) || goal });
+                img.style.opacity = '1';
+                const key = (nextMonster && (nextMonster.name || nextMonster.image)) ? String(nextMonster.name || nextMonster.image) : 'default';
+                currentMonsterKey = key;
+                if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'setMonster', key })); } catch {} }
+                else pendingMonsterKey = key;
+                // Replenish all players to full HP
+                const selfUnit = document.getElementById('player');
+                if (selfUnit) { applyHealToPlayer(selfId || 'self', 9999); }
+                const remotes = Array.from(document.querySelectorAll('[data-player-id]'));
+                for (const el of remotes) { const id = el.getAttribute('data-player-id'); if (id) applyHealToPlayer(id, 9999); }
+                resetDefeatUX();
+              }
+            } catch {}
+          }
+        }, 1000);
       }
       function resetDefeatUX(){
         const img = document.getElementById('monsterSprite');
         if (img) img.style.opacity = '1';
         if (defeatBanner) { defeatBanner.style.display = 'none'; defeatBanner.style.opacity = '0'; }
+        const cd = document.getElementById('defeatCountdown'); if (cd) cd.remove();
+        if (defeatCountdownTimer) { try { clearInterval(defeatCountdownTimer); } catch {} defeatCountdownTimer = null; }
         monsterDefeated = false;
       }
       function updatePlayerHp(){ if (playerHpEl) playerHpEl.textContent = `${playerHp} / ${playerMaxHp}`; }
@@ -1521,6 +1618,50 @@
           el.style.opacity = '0';
           el.style.visibility = 'hidden';
           el.style.transform = 'translateY(0)';
+        // Spawn bright red particles from monster to each target
+        try {
+          const sprite = document.getElementById('monsterSprite');
+          const effects = document.getElementById('effects');
+          if (sprite && effects) {
+            const rectM = sprite.getBoundingClientRect();
+            for (const id of targets) {
+              const unit = id === (selfId || 'self') ? document.getElementById('player') : document.querySelector(`[data-player-id="${id}"]`);
+              if (!unit) continue;
+              const rectU = unit.getBoundingClientRect();
+              const startX = rectM.left + rectM.width / 2;
+              const startY = rectM.top + rectM.height * 0.3;
+              const endX = rectU.left + rectU.width / 2;
+              const endY = rectU.top + 10;
+              // Create a handful of particles
+              for (let i = 0; i < 12; i++) {
+                const p = document.createElement('div');
+                p.style.position = 'fixed';
+                p.style.left = `${startX}px`;
+                p.style.top = `${startY}px`;
+                p.style.width = '6px';
+                p.style.height = '6px';
+                p.style.borderRadius = '999px';
+                p.style.background = '#ff1a1a'; // bright red
+                p.style.boxShadow = '0 0 8px rgba(255,26,26,0.8)';
+                p.style.opacity = '0.95';
+                effects.appendChild(p);
+                const dx = endX - startX;
+                const dy = endY - startY;
+                const jitterX = (Math.random() - 0.5) * 20;
+                const jitterY = (Math.random() - 0.5) * 10;
+                const keyframes = [
+                  { transform: 'translate(0,0)', opacity: 0.9 },
+                  { transform: `translate(${dx * 0.6 + jitterX}px, ${dy * 0.6 + jitterY}px)`, opacity: 1 },
+                  { transform: `translate(${dx}px, ${dy}px)`, opacity: 0 }
+                ];
+                const duration = 520 + Math.random() * 280;
+                const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+                const anim = p.animate(keyframes, { duration, easing, fill: 'forwards' });
+                anim.finished.catch(()=>{}).finally(()=>{ p.remove(); });
+              }
+            }
+          }
+        } catch {}
         }
       }
 
@@ -1531,7 +1672,13 @@
         const upPx = window.matchMedia('(max-width: 767px)').matches ? 60 : 30;
         try {
           const suit = el.dataset.suit || 'spade';
-          if (suit !== 'joker') spawnCardParticlesFromPlayer(suit);
+          // Avoid double particles for host: only spawn local particles if action isn't broadcasted from self
+          if (suit !== 'joker') {
+            const actingId = selfId || 'self';
+            // When we send to server, we'll receive a broadcast including our own 'by' id.
+            // Here we limit local spawn; remote effects will render via WS handlers.
+            spawnCardParticlesFromPlayer(suit);
+          }
         } catch {}
         let effectInfo = null;
         try {
