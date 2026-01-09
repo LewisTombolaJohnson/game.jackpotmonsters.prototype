@@ -82,9 +82,10 @@
         position: absolute;
         left: 0; right: 0; top: 50%; transform: translateY(-50%);
         text-align: center;
-        font-size: 0.81rem; /* 10% smaller */
-        color: #064e3b; /* dark green */
-        font-weight: 800;
+        /* Match mobile's darker, bolder look across breakpoints */
+        font-size: 0.9rem;
+        color: #064e3b; /* dark green for high contrast */
+        font-weight: 900;
         mix-blend-mode: screen;
       }
       /* Jackpot overlay under the progress bar without affecting layout */
@@ -94,7 +95,9 @@
         left: 50%;
         transform: translateX(-50%);
         pointer-events: none;
-        font-weight: 800;
+        /* Unify font size and weight across mobile/desktop */
+        font-weight: 900;
+        font-size: clamp(1rem, 2.8vw, 1.25rem);
         color: #facc15;
         text-shadow: 0 1px 2px rgba(0,0,0,0.45);
       }
@@ -109,18 +112,50 @@
         top: 0;
         bottom: calc(var(--cabinet-height) + var(--cards-height) + 10vh); /* leave room for cards + character band */
         display: grid;
-        place-items: center;
+        /* Anchor content to the top, centered horizontally */
+        place-items: start center;
         z-index: 0; /* under character and effects */
         pointer-events: auto; /* allow overlay button interactions */
       }
+      /* Wrapper to anchor and scale the monster from the top */
+      #monsterSpriteWrap {
+        transform-origin: top center;
+        pointer-events: none; /* let buttons be clickable */
+        display: grid;
+        place-items: center;
+      }
       #monsterArea img {
         max-width: min(90%, 520px);
-        max-height: 90%;
+        /* Reduce height a touch and add bottom clearance so it never crowds the player band */
+        max-height: 84%;
+        margin-bottom: clamp(10px, 3vh, 40px);
         width: auto;
         height: auto;
         object-fit: contain;
         filter: drop-shadow(0 10px 24px rgba(0,0,0,0.5));
         pointer-events: none; /* image itself not clickable */
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+      }
+  /* Mobile: grow ~15% from previous (0.75 -> ~0.8625) and keep top anchor so growth is downward */
+  #monsterSpriteWrap { transform: translateY(5%) scale(0.8625); }
+      /* Desktop: keep the monster a bit narrower and maintain comfortable gap above players */
+      @media (min-width: 768px) {
+        /* Desktop: center monster vertically/horizontally */
+        #monsterArea { place-items: center; }
+        #monsterArea img {
+          /* Prioritise vertical fit between jackpot and player band */
+          max-width: min(80%, 680px);
+          max-height: 90%;
+          /* Remove bottom margin so true centering isn't biased */
+          margin: 0;
+        }
+        /* Desktop: grow ~15% from previous scale (1.06 -> ~1.219) with top anchor so growth is downward */
+        #monsterSpriteWrap {
+          transform-origin: top center;
+          transform: translateY(3%) scale(1.219);
+        }
       }
       /* Corner buttons (stats/debug) */
       .cornerBtn {
@@ -463,7 +498,9 @@
   <main id="game" aria-label="Game area" style="visibility:hidden;">
       <!-- Monster zone (between progress bar and character area) -->
       <section id="monsterArea" aria-label="Monster area">
-        <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
+        <div id="monsterSpriteWrap">
+          <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
+        </div>
         <!-- Defeat Banner -->
         <div id="defeatBanner" style="display:none; position:absolute; inset:0; display:none; align-items:center; justify-content:center;">
           <div style="background:rgba(2,6,23,0.85); color:#fde68a; border:1px solid rgba(148,163,184,0.35); border-radius:12px; padding:10px 16px; font-weight:800; letter-spacing:0.5px;">
@@ -1515,27 +1552,49 @@
           tag.textContent = `${label}${amountText}`;
         }
         if (supportsWAAPI) {
-          // Up animation
-          const up = el.animate([
-            { transform: 'translateY(0px)' },
-            { transform: `translateY(-${upPx}px)` }
-          ], { duration: 300, easing: 'ease-out', fill: 'forwards' });
-          if (tag) tag.style.opacity = '1';
-          try { await up.finished; } catch {}
-          await sleep(0);
-          // Down animation
-          const down = el.animate([
-            { transform: `translateY(-${upPx}px)` },
-            { transform: 'translateY(0px)' }
-          ], { duration: 300, easing: 'ease-in', fill: 'forwards' });
-          try { await down.finished; } catch {}
-          if (tag) tag.style.opacity = '0';
+          const suitForAnim = el.dataset.suit || 'spade';
+          if (suitForAnim === 'joker') {
+            // Down-then-up animation for Joker
+            const down1 = el.animate([
+              { transform: 'translateY(0px)' },
+              { transform: `translateY(${upPx}px)` }
+            ], { duration: 300, easing: 'ease-out', fill: 'forwards' });
+            if (tag) tag.style.opacity = '1';
+            try { await down1.finished; } catch {}
+            await sleep(0);
+            const up1 = el.animate([
+              { transform: `translateY(${upPx}px)` },
+              { transform: 'translateY(0px)' }
+            ], { duration: 300, easing: 'ease-in', fill: 'forwards' });
+            try { await up1.finished; } catch {}
+            if (tag) tag.style.opacity = '0';
+          } else {
+            // Default up-then-down
+            const up = el.animate([
+              { transform: 'translateY(0px)' },
+              { transform: `translateY(-${upPx}px)` }
+            ], { duration: 300, easing: 'ease-out', fill: 'forwards' });
+            if (tag) tag.style.opacity = '1';
+            try { await up.finished; } catch {}
+            await sleep(0);
+            const down = el.animate([
+              { transform: `translateY(-${upPx}px)` },
+              { transform: 'translateY(0px)' }
+            ], { duration: 300, easing: 'ease-in', fill: 'forwards' });
+            try { await down.finished; } catch {}
+            if (tag) tag.style.opacity = '0';
+          }
         } else {
           // CSS transition fallback
+          const suitForAnim = el.dataset.suit || 'spade';
           el.style.transition = 'transform 300ms ease-out';
           el.style.transform = 'translateY(0px)';
           forceReflow(el);
-          el.style.transform = `translateY(-${upPx}px)`;
+          if (suitForAnim === 'joker') {
+            el.style.transform = `translateY(${upPx}px)`;
+          } else {
+            el.style.transform = `translateY(-${upPx}px)`;
+          }
           if (tag) tag.style.opacity = '1';
           await sleep(320);
           await sleep(0);
@@ -1680,46 +1739,51 @@
             applyJokerDamageToTargets(dmg, targets);
           }
         } else if (suit === 'heart') {
-          // Hearts heal the player using the same formula we used for prize,
-          // converted to HP and capped at max HP.
+          // Hearts: special face-card rules and fallback to numeric formula
           const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
-          let healValueCurrency;
-          if (rankText === 'A') {
-            healValueCurrency = Number((5 * stake).toFixed(2));
-          } else if (rankText === 'K') {
-            healValueCurrency = Number((3 * stake).toFixed(2));
+          let selfHeal = 0;
+          let othersHeal = 0;
+          let othersCount = 0;
+          if (rankText === 'J') {
+            selfHeal = 5; othersHeal = 2; othersCount = 2;
           } else if (rankText === 'Q') {
-            healValueCurrency = Number(((1.5) * stake).toFixed(2));
-          } else if (rankText === 'J') {
-            healValueCurrency = Number((1 * stake).toFixed(2));
-          } else if (isNumberCard) {
-            healValueCurrency = Number(((v / 10) * stake).toFixed(2));
+            selfHeal = 10; othersHeal = 4; othersCount = 4;
+          } else if (rankText === 'K') {
+            selfHeal = 15; othersHeal = 6; othersCount = 6;
           } else {
-            healValueCurrency = 0;
-          }
-          const healPoints = Math.max(0, Math.round(healValueCurrency));
-          amountApplied = healPoints;
-          statHearts++; updateStatsCounters();
-          if (healPoints > 0) {
-            const faceCount = rankText === 'J' ? 3 : rankText === 'Q' ? 6 : rankText === 'K' ? 9 : 0;
-            if (faceCount > 0) {
-              if (wsConnected && ws) {
-                try { ws.send(JSON.stringify({ type: 'heartHealRequest', amount: healPoints, count: faceCount })); } catch {}
-              } else {
-                // Local fallback: random subset
-                let ids = Array.from(lobbyPlayers.keys());
-                if (ids.length === 0) ids = [selfId || 'self'];
-                for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
-                const targets = ids.slice(0, Math.min(faceCount, ids.length));
-                for (const id of targets) { applyHealToPlayer(id, healPoints); spawnHeartRingForPlayer(id); }
-              }
+            // Non-face and Ace cards follow currency-based formula converted to HP
+            let healValueCurrency;
+            if (rankText === 'A') {
+              healValueCurrency = Number((5 * stake).toFixed(2));
+            } else if (isNumberCard) {
+              healValueCurrency = Number(((v / 10) * stake).toFixed(2));
             } else {
-              if (wsConnected && ws) {
-                try { ws.send(JSON.stringify({ type: 'healPlayer', id: selfId || 'self', amount: healPoints })); } catch {}
-              } else {
-                applyHealToPlayer(selfId || 'self', healPoints);
-                spawnHeartRingForPlayer(selfId || 'self');
-              }
+              healValueCurrency = 0;
+            }
+            selfHeal = Math.max(0, Math.round(healValueCurrency));
+            othersHeal = 0; othersCount = 0; // no group heal for non-face
+          }
+          amountApplied = selfHeal; // report primary effect amount
+          statHearts++; updateStatsCounters();
+          // Apply self heal
+          if (selfHeal > 0) {
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'healPlayer', id: selfId || 'self', amount: selfHeal })); } catch {}
+            } else {
+              applyHealToPlayer(selfId || 'self', selfHeal);
+              spawnHeartRingForPlayer(selfId || 'self');
+            }
+          }
+          // Apply others heal (random subset)
+          if (othersHeal > 0 && othersCount > 0) {
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'heartHealRequest', amount: othersHeal, count: othersCount })); } catch {}
+            } else {
+              let ids = Array.from(lobbyPlayers.keys());
+              if (ids.length === 0) ids = [selfId || 'self'];
+              for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+              const targets = ids.slice(0, Math.min(othersCount, ids.length));
+              for (const id of targets) { applyHealToPlayer(id, othersHeal); spawnHeartRingForPlayer(id); }
             }
           }
           label = 'Heal';
