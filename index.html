@@ -708,7 +708,13 @@
 
     // Call this when a shared prize is received from another player
     function addSharedPrize(amount, fromPlayer) {
-      sharedPrizeLog.push({ amount, fromPlayer });
+      // If this player already exists in the log, sum their amount
+      const existing = sharedPrizeLog.find(e => e.fromPlayer === fromPlayer);
+      if (existing) {
+        existing.amount += amount;
+      } else {
+        sharedPrizeLog.push({ amount, fromPlayer });
+      }
       sharedPrizeTotal += amount;
       chestAmount.textContent = '£' + sharedPrizeTotal.toFixed(2);
       pulseChest();
