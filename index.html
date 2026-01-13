@@ -157,8 +157,8 @@
           transform: translateY(3%) scale(1.219);
         }
       }
-      /* Corner buttons (stats/debug) */
-      .cornerBtn {
+      /* Corner buttons (stats/debug/help) */
+      .cornerBtn, .helpBtn {
         position: absolute;
         top: 12px;
         right: 12px;
@@ -173,6 +173,18 @@
         cursor: pointer;
         z-index: 2;
         box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+      }
+      .helpBtn {
+        left: 12px;
+        right: auto;
+        width: 44px;
+        height: 44px;
+        font-size: 1.5rem;
+        font-weight: 900;
+        background: rgba(2,6,23,0.85);
+        color: #facc15;
+        border: 2px solid #facc15;
+        box-shadow: 0 6px 18px rgba(250,204,21,0.12);
       }
       .cornerBtn:active { transform: translateY(1px); }
       .cornerBtn svg { width: 22px; height: 22px; opacity: 0.9; }
@@ -324,7 +336,7 @@
         display: grid;
         place-items: center;
         background: rgba(2, 6, 23, 0.84);
-        z-index: 50;
+        z-index: 1000;
         padding: 16px;
         padding-bottom: calc(16px + var(--safe));
       }
@@ -480,7 +492,7 @@
           <strong>Players</strong>
           <ul id="playerList" style="list-style:none; padding:0; margin:8px 0; display:flex; flex-direction:column; gap:6px;"></ul>
         </div>
-        <button id="startGameBtn" class="btn btn-primary btn-wide">Start Game</button>
+  <button id="startGameBtn" class="btn btn-primary btn-wide" style="display:none;">Start Game</button>
         <button id="leaveLobbyBtn" class="btn btn-ghost btn-wide">Leave</button>
       </div>
     </section>
@@ -497,9 +509,73 @@
     </header>
   <main id="game" aria-label="Game area" style="visibility:hidden;">
       <!-- Monster zone (between progress bar and character area) -->
-      <section id="monsterArea" aria-label="Monster area">
-        <div id="monsterSpriteWrap">
-          <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" />
+  <button id="helpBtn" class="helpBtn" aria-label="How to Play" title="How to Play">?</button>
+  <section id="monsterArea" aria-label="Monster area" style="position: relative;">
+  <div id="assistNotifications" style="position: fixed; left: 0; top: 120px; min-width: 120px; max-width: 220px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; align-items: flex-start;"></div>
+    <!-- ...existing code... -->
+  </section>
+  <!-- Help/Rules Modal moved outside game area for stacking -->
+  <section id="helpModal" class="overlay" style="display:none; position:fixed; z-index:2147483647;" aria-label="How to Play">
+    <div class="modal" style="max-width: 480px;">
+      <h2 style="margin-bottom:8px;">How to Play</h2>
+      <div style="font-size:1.1rem; margin-bottom:10px;">Defeat monsters by playing cards. Each card suit has a different effect. Your stake increases your rewards and damage.</div>
+      <ul style="margin-bottom:10px;">
+        <li><b>Spades/Clubs</b>: Deal damage to the monster. Face cards do more.</li>
+        <li><b>Diamonds</b>: Add to your prize. Higher stake = bigger prize.</li>
+        <li><b>Hearts</b>: Heal yourself (and others with face cards).</li>
+        <li><b>Joker</b>: Monster attacks random players. Red particles show who is hit.</li>
+      </ul>
+      <div style="margin-bottom:10px;">
+        <b>Card Payouts (per £ stake):</b>
+        <ul style="font-size:0.98rem;">
+          <li>Number cards: Value/10 × stake (e.g. 7 = 0.7×stake)</li>
+          <li>Jack: see below</li>
+          <li>Queen: see below</li>
+          <li>King: see below</li>
+          <li>Ace: 5×stake (Diamonds/Hearts)</li>
+        </ul>
+      </div>
+      <div style="margin-bottom:10px;">
+        <b>Face Card Effects:</b>
+        <ul style="font-size:0.98rem;">
+          <li><b>Spade/Club J/Q/K</b>: Deal 11/12/13 damage × stake</li>
+          <li><b>Diamond J/Q/K</b>: +1/1.5/3 × stake to prize</li>
+          <li><b>Heart J</b>: Heal self 5, 2 others for 2</li>
+          <li><b>Heart Q</b>: Heal self 10, 4 others for 4</li>
+          <li><b>Heart K</b>: Heal self 15, 6 others for 6</li>
+        </ul>
+      </div>
+      <div style="margin-bottom:10px;">
+        <b>Tips:</b>
+        <ul style="font-size:0.98rem;">
+          <li>Drag your avatar to move horizontally.</li>
+          <li>Only the lobby owner can start the game.</li>
+          <li>Jackpot is a work in progress!</li>
+        </ul>
+      </div>
+      <button id="closeHelpBtn" class="btn btn-ghost" style="margin-top:8px;">Close</button>
+    </div>
+  </section>
+    <script>
+      // Help/Rules modal logic
+      const helpBtn = document.getElementById('helpBtn');
+      const helpModal = document.getElementById('helpModal');
+      const closeHelpBtn = document.getElementById('closeHelpBtn');
+      if (helpBtn && helpModal) {
+        helpBtn.onclick = () => { helpModal.style.display = 'grid'; };
+      }
+      if (closeHelpBtn && helpModal) {
+        closeHelpBtn.onclick = () => { helpModal.style.display = 'none'; };
+      }
+      // Dismiss modal on overlay click
+      if (helpModal) {
+        helpModal.addEventListener('click', (e) => { if (e.target === helpModal) helpModal.style.display = 'none'; });
+      }
+      // Show How to Play menu on top by default
+      // No automatic showing of How to Play menu
+    </script>
+        <div id="monsterSpriteWrap" style="position: relative; width: 100%; height: 50%;">
+          <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" style="position: absolute; top: 0; left: 50%; transform: translateX(-50%) scaleY(0.85); transform-origin: top center; max-width: 100%; height: 100%; object-fit: contain;" />
         </div>
         <!-- Defeat Banner -->
         <div id="defeatBanner" style="display:none; position:absolute; inset:0; display:none; align-items:center; justify-content:center;">
@@ -596,7 +672,93 @@
         </div>
       </div>
     </section>
+    <!-- Shared Prize Chest Overlay -->
+  <div id="chestOverlay" style="position:fixed; right:24px; bottom:8vh; z-index:999; display:flex; flex-direction:column; align-items:center; pointer-events:auto;">
+      <button id="chestBtn" style="background:none; border:none; padding:0; cursor:pointer; outline:none; position:relative;">
+        <img src="assets/treasure-chest.png" alt="Shared Prize Chest" id="chestImg" style="width:64px; height:64px; transition:box-shadow 0.3s, filter 0.3s; box-shadow:0 4px 16px rgba(250,204,21,0.18);" />
+        <span id="chestPulse" style="position:absolute; left:0; top:0; width:64px; height:64px; border-radius:50%; pointer-events:none; display:none;"></span>
+      </button>
+      <span id="chestAmount" style="margin-top:4px; font-weight:800; color:#facc15; font-size:1.1rem; text-shadow:0 1px 2px rgba(0,0,0,0.45);">£0</span>
+    </div>
+    <!-- Chest Log Modal -->
+    <section id="chestLogModal" class="overlay" style="display:none; z-index:1001;" aria-label="Shared Prize Log">
+      <div class="modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <h3 style="margin:0;">Shared Prize Log</h3>
+          <button id="closeChestLog" class="btn btn-ghost">Close</button>
+        </div>
+        <div id="chestLogContent" style="margin-top:10px; font-size:1rem;"></div>
+      </div>
+    </section>
     <footer class="cabinet" aria-label="Controls cabinet">
+    <script>
+    // --- Chest Overlay Logic ---
+    const chestBtn = document.getElementById('chestBtn');
+    const chestImg = document.getElementById('chestImg');
+    const chestPulse = document.getElementById('chestPulse');
+    const chestAmount = document.getElementById('chestAmount');
+    const chestOverlay = document.getElementById('chestOverlay');
+    const chestLogModal = document.getElementById('chestLogModal');
+    const closeChestLog = document.getElementById('closeChestLog');
+    const chestLogContent = document.getElementById('chestLogContent');
+
+    // Track shared prizes since last chest opening
+    let sharedPrizeLog = [];
+    let sharedPrizeTotal = 0;
+
+    // Call this when a shared prize is received from another player
+    function addSharedPrize(amount, fromPlayer) {
+      sharedPrizeLog.push({ amount, fromPlayer });
+      sharedPrizeTotal += amount;
+      chestAmount.textContent = '£' + sharedPrizeTotal.toFixed(2);
+      pulseChest();
+    }
+
+    // Pulse animation for chest
+    function pulseChest() {
+      chestImg.style.filter = 'drop-shadow(0 0 16px #facc15) brightness(1.15)';
+      chestImg.style.boxShadow = '0 0 32px 8px #facc15';
+      chestPulse.style.display = 'block';
+      chestPulse.animate([
+        { boxShadow: '0 0 0 0 #facc15', opacity: 0.7 },
+        { boxShadow: '0 0 32px 16px #facc15', opacity: 0.2 },
+        { boxShadow: '0 0 0 0 #facc15', opacity: 0 }
+      ], { duration: 700, easing: 'ease-out' });
+      setTimeout(() => {
+        chestImg.style.filter = '';
+        chestImg.style.boxShadow = '0 4px 16px rgba(250,204,21,0.18)';
+        chestPulse.style.display = 'none';
+      }, 700);
+    }
+
+    // Chest button opens log modal
+    if (chestBtn && chestLogModal) {
+      chestBtn.onclick = () => {
+        // Build log content
+        if (sharedPrizeLog.length === 0) {
+          chestLogContent.innerHTML = '<div style="opacity:0.7;">No shared prizes since last opening.</div>';
+        } else {
+          let html = '<ul style="padding-left:0; list-style:none;">';
+          for (const entry of sharedPrizeLog) {
+            html += `<li style="margin-bottom:6px;">+£${entry.amount.toFixed(2)} <span style="opacity:0.8;">from</span> <b>${entry.fromPlayer}</b></li>`;
+          }
+          html += '</ul>';
+          html += `<div style="margin-top:10px; font-weight:800; color:#facc15;">Total: £${sharedPrizeTotal.toFixed(2)}</div>`;
+        }
+        chestLogModal.style.display = 'grid';
+      };
+    }
+    if (closeChestLog && chestLogModal) {
+      closeChestLog.onclick = () => {
+        chestLogModal.style.display = 'none';
+        // Reset log after viewing
+        sharedPrizeLog = [];
+        sharedPrizeTotal = 0;
+        chestAmount.textContent = '£0';
+      };
+    }
+    // Only update the chest when players on the network share a heal or a prize with this client
+    </script>
       <div class="metric" id="balance">
         <span class="label">Balance</span>
         <span class="value" aria-live="polite">£100</span>
@@ -702,6 +864,15 @@
             try {
               ownerId = msg.ownerId || null;
               if (debugBtn) debugBtn.style.display = (selfId && ownerId && String(ownerId) === String(selfId)) ? 'block' : 'none';
+              // Show Start Game button only for lobby owner
+              const startGameBtn = document.getElementById('startGameBtn');
+              if (startGameBtn) {
+                if (selfId && ownerId && String(ownerId) === String(selfId)) {
+                  startGameBtn.style.display = 'block';
+                } else {
+                  startGameBtn.style.display = 'none';
+                }
+              }
             } catch {}
           } else if (msg.type === 'jackpotState') {
             const value = Number(msg.jackpot) || 0;
@@ -738,7 +909,7 @@
             const dmg = Math.max(1, Number(msg.damage)||1);
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
             showMonsterAttackOverlay();
-            // For each hit player, spawn purple particles from monster to them
+            // For each hit player, spawn bright red particles from monster to them
             try {
               const sprite = document.getElementById('monsterSprite');
               const effects = document.getElementById('effects');
@@ -760,8 +931,8 @@
                     p.style.width = '6px';
                     p.style.height = '6px';
                     p.style.borderRadius = '999px';
-                    p.style.background = '#a21caf'; // purple
-                    p.style.boxShadow = '0 0 8px rgba(162,28,175,0.8)';
+                    p.style.background = '#ff1a1a'; // bright red
+                    p.style.boxShadow = '0 0 8px rgba(255,26,26,0.8)';
                     p.style.opacity = '0.95';
                     effects.appendChild(p);
                     const dx = endX - startX;
@@ -929,6 +1100,14 @@
         }
         // Also render player avatars in the character band
         renderLobbyAvatars(players);
+        // Patch: Always show Start Game button for self if ownerId is not yet set but we just created the lobby
+        const startGameBtn = document.getElementById('startGameBtn');
+        if (startGameBtn) {
+          // If ownerId is not set, but we are the only player, assume we are the owner
+          if ((typeof ownerId === 'undefined' || ownerId === null) && players.length === 1 && players[0].id === selfId) {
+            startGameBtn.style.display = 'block';
+          }
+        }
       }
 
       function setSelfIdentity(name){
@@ -1005,11 +1184,48 @@
         const badge = entry.el.querySelector('.hpBadge');
         if (badge) badge.textContent = `${Math.max(0, entry.hp)} / 50`;
       }
-      function applyHealToPlayer(id, amount){
+      function applyHealToPlayer(id, amount, fromName){
         const entry = lobbyPlayers.get(id);
         if (!entry) return;
         entry.hp = Math.min(50, (entry.hp || 0) + Math.max(0, amount||0));
         updateHpBadgeFor(id);
+        // Show assist notification if this is us and fromName is provided
+        if ((id === (selfId || 'self')) && fromName) {
+          showAssistNotification(`${fromName} healed you for ${amount}`);
+        }
+      }
+
+      // Show a notification to the left of the monster
+      function showAssistNotification(text) {
+        const wrap = document.getElementById('assistNotifications');
+        if (!wrap) return;
+        const note = document.createElement('div');
+  note.textContent = text;
+  note.style.background = 'linear-gradient(90deg, rgba(34,197,94,0.95) 0%, rgba(34,197,94,0.0) 100%)';
+  note.style.color = '#fff';
+  note.style.fontWeight = '700';
+  note.style.fontSize = '0.6rem';
+  note.style.borderRadius = '0 12px 12px 0';
+  note.style.padding = '7px 22px 7px 16px';
+  note.style.boxShadow = '0 2px 10px rgba(34,197,94,0.10)';
+  note.style.opacity = '0';
+  note.style.transform = 'translateY(10px)';
+  note.style.transition = 'opacity 0.22s, transform 0.22s';
+  note.style.marginLeft = '0';
+  note.style.textShadow = '0 1px 2px rgba(0,0,0,0.12)';
+  note.style.pointerEvents = 'none';
+  wrap.appendChild(note);
+        // Animate in
+        setTimeout(() => {
+          note.style.opacity = '1';
+          note.style.transform = 'translateY(0)';
+        }, 10);
+        // Animate out and remove after 2.2s
+        setTimeout(() => {
+          note.style.opacity = '0';
+          note.style.transform = 'translateY(-10px)';
+          setTimeout(() => note.remove(), 350);
+        }, 2200);
       }
       function applyJokerDamageToTargets(dmg, targets){
         const ids = Array.isArray(targets) && targets.length ? targets : Array.from(lobbyPlayers.keys());
@@ -1323,29 +1539,32 @@
           if (remaining <= 0) {
             clearInterval(defeatCountdownTimer); defeatCountdownTimer = null;
             countdown?.remove();
-            // Move to a random monster (next level) and replenish all players to full
-            try {
-              const currentSrc = img.getAttribute('src');
-              const nextMonster = await pickRandomMonsterFromJson(currentSrc);
-              if (nextMonster && nextMonster.image) {
-                const nextLevel = Number((Number(nextMonster.level) || 1) + 1);
-                img.setAttribute('src', String(nextMonster.image));
-                if (nextMonster.name) img.setAttribute('alt', String(nextMonster.name));
-                currentMonster = { ...nextMonster, level: nextLevel };
-                updateMonsterUI({ level: nextLevel, health: Number(nextMonster.health) || goal });
-                img.style.opacity = '1';
-                const key = (nextMonster && (nextMonster.name || nextMonster.image)) ? String(nextMonster.name || nextMonster.image) : 'default';
-                currentMonsterKey = key;
-                if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'setMonster', key })); } catch {} }
-                else pendingMonsterKey = key;
-                // Replenish all players to full HP
-                const selfUnit = document.getElementById('player');
-                if (selfUnit) { applyHealToPlayer(selfId || 'self', 9999); }
-                const remotes = Array.from(document.querySelectorAll('[data-player-id]'));
-                for (const el of remotes) { const id = el.getAttribute('data-player-id'); if (id) applyHealToPlayer(id, 9999); }
-                resetDefeatUX();
-              }
-            } catch {}
+            // Only the lobby owner picks and broadcasts the next monster
+            if (selfId && ownerId && String(selfId) === String(ownerId)) {
+              try {
+                const currentSrc = img.getAttribute('src');
+                const nextMonster = await pickRandomMonsterFromJson(currentSrc);
+                if (nextMonster && nextMonster.image) {
+                  const nextLevel = Number((Number(nextMonster.level) || 1) + 1);
+                  img.setAttribute('src', String(nextMonster.image));
+                  if (nextMonster.name) img.setAttribute('alt', String(nextMonster.name));
+                  currentMonster = { ...nextMonster, level: nextLevel };
+                  updateMonsterUI({ level: nextLevel, health: Number(nextMonster.health) || goal });
+                  img.style.opacity = '1';
+                  const key = (nextMonster && (nextMonster.name || nextMonster.image)) ? String(nextMonster.name || nextMonster.image) : 'default';
+                  currentMonsterKey = key;
+                  if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'setMonster', key })); } catch {} }
+                  else pendingMonsterKey = key;
+                  // Replenish all players to full HP
+                  const selfUnit = document.getElementById('player');
+                  if (selfUnit) { applyHealToPlayer(selfId || 'self', 9999); }
+                  const remotes = Array.from(document.querySelectorAll('[data-player-id]'));
+                  for (const el of remotes) { const id = el.getAttribute('data-player-id'); if (id) applyHealToPlayer(id, 9999); }
+                  resetDefeatUX();
+                }
+              } catch {}
+            }
+            // All other clients just wait for the monsterSet event from the server
           }
         }, 1000);
       }
@@ -1820,7 +2039,7 @@
       }
 
       // Apply per-suit card effects to monster health (progress) and prize
-      function applyCardEffect(suit, value, rankText) {
+  function applyCardEffect(suit, value, rankText) {
         const v = Math.max(0, Number(value) || 0);
         const isFace = (rankText === 'J' || rankText === 'Q' || rankText === 'K');
         const critBonus = rankText === 'J' ? 1 : rankText === 'Q' ? 2 : rankText === 'K' ? 3 : 0;
@@ -1842,49 +2061,66 @@
           }
           if (progress <= 0) { showDefeatSequence(); }
         } else if (suit === 'diamond') {
-          // Face card multipliers; numbers use value/10
+          // Face card shared prize logic
           const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
-          let turnPrize;
+          let turnPrize = 0;
+          let sharedPrize = 0;
+          let selfPrize = 0;
+          let othersPrize = 0;
+          let othersCount = 0;
+          let othersNames = [];
           if (rankText === 'A') {
             turnPrize = Number((5 * stake).toFixed(2));
-          } else if (rankText === 'K') {
-            turnPrize = Number((3 * stake).toFixed(2));
-          } else if (rankText === 'Q') {
-            turnPrize = Number(((1.5) * stake).toFixed(2));
-          } else if (rankText === 'J') {
-            turnPrize = Number((1 * stake).toFixed(2));
+            selfPrize = turnPrize;
           } else if (isNumberCard) {
             turnPrize = Number(((v / 10) * stake).toFixed(2));
-          } else {
-            turnPrize = 0;
+            selfPrize = turnPrize;
+          } else if (rankText === 'J') {
+            sharedPrize = Number((3 * stake).toFixed(2));
+            selfPrize = Number((2 * stake).toFixed(2));
+            othersPrize = Number((1 * stake).toFixed(2));
+            othersCount = 1;
+          } else if (rankText === 'Q') {
+            sharedPrize = Number((6 * stake).toFixed(2));
+            selfPrize = Number((4 * stake).toFixed(2));
+            othersPrize = Number((1 * stake).toFixed(2));
+            othersCount = 2;
+          } else if (rankText === 'K') {
+            sharedPrize = Number((9 * stake).toFixed(2));
+            selfPrize = Number((6 * stake).toFixed(2));
+            othersPrize = Number((1 * stake).toFixed(2));
+            othersCount = 3;
           }
-          amountApplied = turnPrize;
-          prize = Number((prize + turnPrize).toFixed(2));
-          prizeEl.textContent = formatCurrency(prize);
-          label = 'Prize';
-          statDiamonds++; statPrizes = Number((statPrizes + turnPrize).toFixed(2)); updateStatsCounters();
-        } else if (suit === 'joker') {
-          // Joker triggers a monster attack on a random subset of players
-          label = 'Attack';
-          if (wsConnected && ws) {
-            try { ws.send(JSON.stringify({ type: 'jokerAttackRequest' })); } catch {}
-            amountApplied = undefined; // amount decided server-side
-          } else {
-            const dmg = Math.floor(Math.random() * 5) + 1;
-            amountApplied = dmg;
-            showMonsterAttackOverlay();
-            // Choose a random non-empty subset of players locally
-            let ids = Array.from(lobbyPlayers.keys());
+          if (selfPrize > 0) {
+            prize = Number((prize + selfPrize).toFixed(2));
+            prizeEl.textContent = formatCurrency(prize);
+            statDiamonds++; statPrizes = Number((statPrizes + selfPrize).toFixed(2)); updateStatsCounters();
+            // Do NOT show notification for self-earned prize
+          }
+          if (othersPrize > 0 && othersCount > 0) {
+            // Pick random other players
+            let ids = Array.from(lobbyPlayers.keys()).filter(id => id !== (selfId || 'self'));
             if (ids.length === 0) ids = [selfId || 'self'];
-            // Shuffle ids
-            for (let i = ids.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              const tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+            for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+            const targets = ids.slice(0, Math.min(othersCount, ids.length));
+            for (const id of targets) {
+              // If this is us, show notification and update prize
+              if (id === (selfId || 'self')) {
+                prize = Number((prize + othersPrize).toFixed(2));
+                prizeEl.textContent = formatCurrency(prize);
+                statDiamonds++; statPrizes = Number((statPrizes + othersPrize).toFixed(2)); updateStatsCounters();
+                showAssistNotification(`You received a shared prize of ${formatCurrency(othersPrize)}!`);
+                spawnCardParticlesFromPlayer('diamond');
+              }
+              // Do NOT show notification for other players
             }
-            const targetCount = Math.max(1, Math.floor(Math.random() * ids.length) + 1);
-            const targets = ids.slice(0, targetCount);
-            applyJokerDamageToTargets(dmg, targets);
           }
+          if (sharedPrize > 0) {
+            amountApplied = sharedPrize;
+          } else {
+            amountApplied = selfPrize;
+          }
+          label = 'Prize';
         } else if (suit === 'heart') {
           // Hearts: special face-card rules and fallback to numeric formula
           const isNumberCard = /^(?:2|3|4|5|6|7|8|9|10)$/.test(rankText);
@@ -1979,7 +2215,7 @@
       }
 
       // Spawn a green healing ring for a given player's avatar (self or remote)
-      function spawnHeartRingForPlayer(id){
+      function spawnHeartRingForPlayer(id, fromName) {
         try {
           const entry = lobbyPlayers.get(id);
           const gameEl = document.getElementById('game');
@@ -2021,6 +2257,26 @@
           }
         } catch {}
       }
+      // --- Simulate random assists for testing ---
+      function simulateRandomHeals() {
+        const fakeNames = ["Alice", "Bob", "Charlie", "Dana", "Eve", "Frank"];
+        function triggerFakeHeal() {
+          const name = fakeNames[Math.floor(Math.random() * fakeNames.length)];
+          const amount = Math.floor(Math.random() * 8) + 2;
+          applyHealToPlayer(selfId || 'self', amount, name);
+          spawnHeartRingForPlayer(selfId || 'self');
+          // Schedule next
+          const next = 1000 + Math.random() * 9000;
+          setTimeout(triggerFakeHeal, next);
+        }
+        setTimeout(triggerFakeHeal, 1200);
+      }
+
+      // Start simulation on DOMContentLoaded for testing
+      window.addEventListener('DOMContentLoaded', () => {
+        simulateRandomHeals();
+        simulateRandomPrizes();
+      });
 
       // Particle effects per suit — emitted from PLAYER rectangle
       function spawnCardParticlesFromPlayer(suit) {
