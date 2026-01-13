@@ -211,24 +211,6 @@ wss.on('connection', (ws) => {
       const shuffled = playerIds.sort(() => Math.random() - 0.5);
       const targets = shuffled.slice(0, count);
       broadcast(code, 'jokerAttack', { code, by: client.id, damage, targets });
-    } else if (type === 'defeatStart') {
-      // Begin a server-coordinated 10s countdown, then broadcast resetHealthAll
-      const code = client.code; if (!code) return;
-      const lobby = lobbies.get(code); if (!lobby) return;
-      // Only owner can start to avoid dupe timers
-      if (lobby.ownerId && lobby.ownerId !== client.id) return;
-      let remaining = 10;
-      broadcast(code, 'defeatCountdown', { code, remaining });
-      const timer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          clearInterval(timer);
-          // Reset health for all players to full client-side value (clients know max)
-          broadcast(code, 'resetHealthAll', { code });
-        } else {
-          broadcast(code, 'defeatCountdown', { code, remaining });
-        }
-      }, 1000);
     }
   });
 

@@ -2109,8 +2109,16 @@
             if (ids.length === 0) ids = [selfId || 'self'];
             for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
             const targets = ids.slice(0, Math.min(othersCount, ids.length));
+            // Send sharePrize event to server for networked players
+            if (wsConnected && ws && targets.length > 0) {
+              try {
+                // Send both id and name for each target
+                const to = targets.map(id => ({ id, name: (lobbyPlayers.get(id)?.name || id) }));
+                ws.send(JSON.stringify({ type: 'sharePrize', amount: othersPrize, to }));
+              } catch {}
+            }
+            // If this is us (single player/offline), apply prize locally
             for (const id of targets) {
-              // If this is us, show notification and update prize
               if (id === (selfId || 'self')) {
                 prize = Number((prize + othersPrize).toFixed(2));
                 prizeEl.textContent = formatCurrency(prize);
@@ -2118,7 +2126,6 @@
                 showAssistNotification(`You received a shared prize of ${formatCurrency(othersPrize)}!`);
                 spawnCardParticlesFromPlayer('diamond');
               }
-              // Do NOT show notification for other players
             }
           }
           if (sharedPrize > 0) {
@@ -2263,26 +2270,7 @@
           }
         } catch {}
       }
-      // --- Simulate random assists for testing ---
-      function simulateRandomHeals() {
-        const fakeNames = ["Alice", "Bob", "Charlie", "Dana", "Eve", "Frank"];
-        function triggerFakeHeal() {
-          const name = fakeNames[Math.floor(Math.random() * fakeNames.length)];
-          const amount = Math.floor(Math.random() * 8) + 2;
-          applyHealToPlayer(selfId || 'self', amount, name);
-          spawnHeartRingForPlayer(selfId || 'self');
-          // Schedule next
-          const next = 1000 + Math.random() * 9000;
-          setTimeout(triggerFakeHeal, next);
-        }
-        setTimeout(triggerFakeHeal, 1200);
-      }
-
-      // Start simulation on DOMContentLoaded for testing
-      window.addEventListener('DOMContentLoaded', () => {
-        simulateRandomHeals();
-        simulateRandomPrizes();
-      });
+      // Removed simulated notification popups for healing and prizes. Now only show for real network events.
 
       // Particle effects per suit — emitted from PLAYER rectangle
       function spawnCardParticlesFromPlayer(suit) {
