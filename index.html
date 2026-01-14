@@ -1,13 +1,3 @@
-            // Update all player health from server
-            if (Array.isArray(msg.health)) {
-              for (const h of msg.health) {
-                const entry = lobbyPlayers.get(h.id);
-                if (entry) {
-                  entry.hp = h.hp;
-                  updateHpBadgeFor(h.id);
-                }
-              }
-            }
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const debugShowNotification = document.getElementById('debugShowNotification');
