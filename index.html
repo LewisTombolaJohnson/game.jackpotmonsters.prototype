@@ -1,4 +1,16 @@
 <script>
+// DEBUG: Log and highlight the topmost element at the pointer position on click/tap
+window.addEventListener('click', function(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el) {
+    console.log('Clicked element:', el, 'id:', el.id, 'class:', el.className);
+    // Add a red outline for 1s
+    el.style.outline = '3px solid red';
+    setTimeout(() => { el.style.outline = ''; }, 1000);
+  } else {
+    console.log('No element found at click position');
+  }
+}, true);
 window.addEventListener('DOMContentLoaded', () => {
   const debugShowNotification = document.getElementById('debugShowNotification');
   if (debugShowNotification) {
