@@ -510,6 +510,19 @@ window.addEventListener('DOMContentLoaded', () => {
           ov.style.pointerEvents = 'none';
         }
       });
+      // Extra guard: hide any modal, backdrop, notification, or debug not inside the active overlay
+      const activeOverlay = document.getElementById(overlayId);
+      ['modal','backdrop','notification','debug'].forEach(cls => {
+        document.querySelectorAll('.'+cls).forEach(el => {
+          if (!activeOverlay || !activeOverlay.contains(el)) {
+            el.style.display = 'none';
+            el.style.pointerEvents = 'none';
+          } else {
+            el.style.display = '';
+            el.style.pointerEvents = '';
+          }
+        });
+      });
     }
     // Example: showOverlay('mainMenu'); // Only main menu visible
     // Call showOverlay('lobbyScreen') etc. as needed in your game flow
