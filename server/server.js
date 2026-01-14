@@ -51,6 +51,12 @@ wss.on('connection', (ws) => {
     let msg = {};
     try { msg = JSON.parse(String(data)); } catch { return; }
     const { type } = msg;
+    if (type === 'slashAttackOverlay') {
+      const code = client.code; if (!code) return;
+      broadcast(code, 'slashAttackOverlay', { code });
+    let msg = {};
+    try { msg = JSON.parse(String(data)); } catch { return; }
+    const { type } = msg;
     if (type === 'create') {
       const code = nano();
       ensureLobby(code);
@@ -118,20 +124,39 @@ wss.on('connection', (ws) => {
       }
     } else if (type === 'healPlayer') {
       const code = client.code; if (!code) return;
+      const lobby = lobbies.get(code); if (!lobby) return;
       const targetId = String(msg.id || client.id);
       const amount = Math.max(0, Number(msg.amount) || 0);
-      if (amount > 0) broadcast(code, 'healPlayer', { code, by: client.id, byName: client.name, id: targetId, amount });
+      if (amount > 0) {
+        for (const [ws2, info] of lobby.players) {
+          if (info.id === targetId) {
+            info.hp = Math.min(50, (info.hp || 0) + amount);
+          }
+        }
+        broadcast(code, 'healPlayer', { code, by: client.id, byName: client.name, id: targetId, amount });
+        // Broadcast updated health
+        const health = Array.from(lobby.players.values()).map(p => ({ id: p.id, hp: p.hp }));
+        broadcast(code, 'healthSync', { code, health });
+      }
     } else if (type === 'heartHealRequest') {
+      // (existing heartHealRequest logic here, if any)
+    } else if (type === 'sharePrize') {
+      // Handle shared prize distribution from diamond face cards
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;
       const amount = Math.max(0, Number(msg.amount) || 0);
-      let count = Math.max(1, Number(msg.count) || 1);
-      const ids = Array.from(lobby.players.values()).map(p=>p.id);
-      if (ids.length === 0 || amount <= 0) return;
-      if (count > ids.length) count = ids.length;
-      const shuffled = ids.sort(()=>Math.random()-0.5);
-      const targets = shuffled.slice(0, count);
-      broadcast(code, 'heartHeal', { code, by: client.id, byName: client.name, amount, targets });
+      const targets = Array.isArray(msg.to) ? msg.to : [];
+      if (amount > 0 && targets.length > 0) {
+        for (const targetId of targets) {
+          // Find the websocket for this player
+          for (const [ws2, info] of lobby.players) {
+            if (info.id === targetId && ws2.readyState === 1) {
+              sendTo(ws2, 'sharedPrize', { code, fromId: client.id, fromName: client.name, amount });
+            }
+          }
+        }
+      }
+      // No further logic for heartHealRequest should be here
     } else if (type === 'jackpotContribute') {
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;
@@ -210,7 +235,16 @@ wss.on('connection', (ws) => {
       const count = Math.max(1, Math.floor(Math.random() * playerIds.length) + 1);
       const shuffled = playerIds.sort(() => Math.random() - 0.5);
       const targets = shuffled.slice(0, count);
+      // Apply damage to targets
+      for (const [ws2, info] of lobby.players) {
+        if (targets.includes(info.id)) {
+          info.hp = Math.max(0, (info.hp || 0) - damage);
+        }
+      }
       broadcast(code, 'jokerAttack', { code, by: client.id, damage, targets });
+      // Broadcast updated health
+      const health = Array.from(lobby.players.values()).map(p => ({ id: p.id, hp: p.hp }));
+      broadcast(code, 'healthSync', { code, health });
     }
   });
 
@@ -228,7 +262,7 @@ function ensureLobby(code) {
 function addPlayer(ws, client) {
   const lobby = lobbies.get(client.code);
   if (!lobby) return;
-  lobby.players.set(ws, { name: client.name, id: client.id, x: 0.5 });
+  lobby.players.set(ws, { name: client.name, id: client.id, x: 0.5, hp: 50 });
 }
 function removePlayer(ws) {
   const client = clients.get(ws);
@@ -249,8 +283,11 @@ function sendRoster(code) {
   for (let i = 0; i < n; i++) {
     infos[i].x = (i + 1) / (n + 1);
   }
-  const players = infos.map(p => ({ id: p.id, name: p.name, x: p.x }));
+  const players = infos.map(p => ({ id: p.id, name: p.name, x: p.x, hp: p.hp }));
   broadcast(code, 'roster', { code, players, ownerId: lobby.ownerId });
+  // Also broadcast full health state
+  const health = infos.map(p => ({ id: p.id, hp: p.hp }));
+  broadcast(code, 'healthSync', { code, health });
 }
 
 function findNameById(lobby, id){

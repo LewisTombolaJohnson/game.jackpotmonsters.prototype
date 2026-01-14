@@ -1,3 +1,13 @@
+            // Update all player health from server
+            if (Array.isArray(msg.health)) {
+              for (const h of msg.health) {
+                const entry = lobbyPlayers.get(h.id);
+                if (entry) {
+                  entry.hp = h.hp;
+                  updateHpBadgeFor(h.id);
+                }
+              }
+            }
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const debugShowNotification = document.getElementById('debugShowNotification');
@@ -875,6 +885,16 @@ window.addEventListener('DOMContentLoaded', () => {
         ws.addEventListener('message', (ev)=>{
           let msg = {}; try { msg = JSON.parse(ev.data); } catch { return; }
           if (msg.type === 'created') {
+          } else if (msg.type === 'slashAttackOverlay') {
+            if (typeof playSlashAttackOverlay === 'function') playSlashAttackOverlay();
+          } else if (msg.type === 'sharedPrize') {
+            // Only process if the prize is for us (the server only sends to the correct recipient)
+            const amount = Math.max(0, Number(msg.amount) || 0);
+            const fromName = msg.fromName || 'Another player';
+            if (amount > 0) {
+              addSharedPrize(amount, fromName);
+              showAssistNotification(`${fromName} shared £${amount.toFixed(2)} with you!`);
+            }
             const code = msg.code; if (!code) return;
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
             location.hash = '#' + code;
@@ -954,10 +974,13 @@ window.addEventListener('DOMContentLoaded', () => {
               } catch {}
             }
           } else if (msg.type === 'healPlayer') {
+            // Only show heal animation/notification if this is us
             const { id, amount, byName } = msg; if (!id) return;
             if (id === (selfId || 'self')) {
-              applyHealToPlayer(id, Number(amount)||0, byName);
               spawnHeartRingForPlayer(id);
+              if (typeof byName === 'string' && byName.trim().length > 0 && byName !== selfName) {
+                showAssistNotification(`${byName} healed you for ${amount}`);
+              }
             }
           } else if (msg.type === 'jokerAttack') {
             const dmg = Math.max(1, Number(msg.damage)||1);
@@ -1010,7 +1033,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 }
               }
             } catch {}
-            applyJokerDamageToTargets(dmg, targets.length ? targets : null);
+            // Damage will be synced by healthSync; just show effects
           } else if (msg.type === 'playerPos') {
             const id = msg.id; const xn = Number(msg.x);
             if (!id || !Number.isFinite(xn)) return;
@@ -1072,14 +1095,11 @@ window.addEventListener('DOMContentLoaded', () => {
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
             const byName = msg.byName || '';
             for (const id of targets) {
-              // Only show notification if the sender is not the receiver
-              if (id === (selfId || 'self') && byName && byName !== selfName) {
-                applyHealToPlayer(id, healAmt, byName);
+              if (id === (selfId || 'self')) {
                 spawnHeartRingForPlayer(id);
-              } else if (id === (selfId || 'self') && (!byName || byName === selfName)) {
-                // Apply heal silently (no notification)
-                applyHealToPlayer(id, healAmt);
-                spawnHeartRingForPlayer(id);
+                if (byName && byName !== selfName) {
+                  showAssistNotification(`${byName} healed you for ${healAmt}`);
+                }
               }
             }
           } else if (msg.type === 'setMonsterHealth') {
@@ -1254,14 +1274,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (badge) badge.textContent = `${Math.max(0, entry.hp)} / 50`;
       }
       function applyHealToPlayer(id, amount, fromName){
-        const entry = lobbyPlayers.get(id);
-        if (!entry) return;
-        entry.hp = Math.min(50, (entry.hp || 0) + Math.max(0, amount||0));
-        updateHpBadgeFor(id);
-        // Show assist notification if this is us and fromName is a non-empty string and not our own name (i.e., only for networked heals from others)
-        if ((id === (selfId || 'self')) && typeof fromName === 'string' && fromName.trim().length > 0 && fromName !== selfName) {
-          showAssistNotification(`${fromName} healed you for ${amount}`);
-        }
+        // No-op: health is now server authoritative
       }
 
       // Show a notification to the left of the monster
@@ -1343,36 +1356,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 2200);
       }
       function applyJokerDamageToTargets(dmg, targets){
-        const ids = Array.isArray(targets) && targets.length ? targets : Array.from(lobbyPlayers.keys());
-        for (const id of ids){
-          const entry = lobbyPlayers.get(id);
-          if (!entry) continue;
-          entry.hp = Math.max(0, (entry.hp || 0) - Math.max(0, dmg||0));
-          updateHpBadgeFor(id);
-          // Flash the hit player's rect or badge
-          if (entry.el){
-            const rect = entry.el.querySelector('#playerRect') || entry.el.querySelector('.playerRect');
-            if (rect) {
-              rect.classList.add('hit');
-              setTimeout(()=>rect.classList.remove('hit'), 260);
-            }
-            const badge = entry.el.querySelector('.hpBadge');
-            if (badge) {
-              badge.animate([
-                { filter: 'brightness(1)' },
-                { filter: 'brightness(1.8)' },
-                { filter: 'brightness(1)' }
-              ], { duration: 260, easing: 'ease-in-out' });
-            }
-          }
-          // Keep local numeric HP in sync for self if tracked separately
-          if (id === (selfId || 'self')) {
-            try {
-              playerHp = Math.max(0, Math.min(playerMaxHp, entry.hp));
-              updatePlayerHp();
-            } catch {}
-          }
-        }
+        // No-op: health is now server authoritative
       }
       function showMonsterAttackOverlay(){
         const area = document.getElementById('monsterArea');
