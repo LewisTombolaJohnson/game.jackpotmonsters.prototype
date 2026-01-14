@@ -54,9 +54,8 @@ wss.on('connection', (ws) => {
     if (type === 'slashAttackOverlay') {
       const code = client.code; if (!code) return;
       broadcast(code, 'slashAttackOverlay', { code });
-    let msg = {};
-    try { msg = JSON.parse(String(data)); } catch { return; }
-    const { type } = msg;
+      return;
+    }
     if (type === 'create') {
       const code = nano();
       ensureLobby(code);
