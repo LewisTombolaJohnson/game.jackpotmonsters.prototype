@@ -120,7 +120,7 @@ wss.on('connection', (ws) => {
       const code = client.code; if (!code) return;
       const targetId = String(msg.id || client.id);
       const amount = Math.max(0, Number(msg.amount) || 0);
-      if (amount > 0) broadcast(code, 'healPlayer', { code, by: client.id, id: targetId, amount });
+      if (amount > 0) broadcast(code, 'healPlayer', { code, by: client.id, byName: client.name, id: targetId, amount });
     } else if (type === 'heartHealRequest') {
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;
@@ -131,7 +131,7 @@ wss.on('connection', (ws) => {
       if (count > ids.length) count = ids.length;
       const shuffled = ids.sort(()=>Math.random()-0.5);
       const targets = shuffled.slice(0, count);
-      broadcast(code, 'heartHeal', { code, by: client.id, amount, targets });
+      broadcast(code, 'heartHeal', { code, by: client.id, byName: client.name, amount, targets });
     } else if (type === 'jackpotContribute') {
       const code = client.code; if (!code) return;
       const lobby = lobbies.get(code); if (!lobby) return;

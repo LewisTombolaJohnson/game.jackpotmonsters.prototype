@@ -1,9 +1,22 @@
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  const debugShowNotification = document.getElementById('debugShowNotification');
+  if (debugShowNotification) {
+    debugShowNotification.addEventListener('click', ()=>{
+      const debugDropdown = document.getElementById('debugDropdown');
+      if (debugDropdown) debugDropdown.style.display = 'none';
+      showAssistNotification('Test notification: This should be flush left!');
+    });
+  }
+});
+</script>
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Card Combat</title>
+  <title>Card Combat</title>
+  <script src="slash-attack.js"></script>
     <style>
       :root {
         --cabinet-height: 8vh; /* 8% of viewport height */
@@ -189,7 +202,9 @@
       .cornerBtn:active { transform: translateY(1px); }
       .cornerBtn svg { width: 22px; height: 22px; opacity: 0.9; }
       /* Debug button stacks under stats with small offset */
-      #debugBtn { top: 58px; }
+  #debugBtn { top: 58px; }
+  /* Remove static top for debugBtn, will be set dynamically */
+  #debugDropdownWrap { position: absolute !important; right: 12px; z-index: 12; display: inline-block; left: unset !important; }
       /* Character area (10% height) above the cards */
       #characterArea {
         position: absolute;
@@ -510,8 +525,25 @@
   <main id="game" aria-label="Game area" style="visibility:hidden;">
       <!-- Monster zone (between progress bar and character area) -->
   <button id="helpBtn" class="helpBtn" aria-label="How to Play" title="How to Play">?</button>
+  <div id="debugDropdownWrap" style="position:absolute; right:12px; z-index:12; display:inline-block; left:unset;">
+    <button id="debugBtn" class="cornerBtn" aria-label="Debug" title="Debug" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 3v4M16 3v4" />
+        <path d="M4 11h16" />
+        <path d="M4 19h16" />
+        <path d="M7 11v8m10-8v8" />
+      </svg>
+    </button>
+    <div id="debugDropdown" style="display:none; position:absolute; right:100%; top:0; background:#222; border-radius:8px; box-shadow:0 4px 16px #0008; min-width:180px; z-index:99999; padding:8px 0; margin-right:10px;">
+      <button class="debugAction" id="debugDrawJokers" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Draw 3 Jokers</button>
+      <button class="debugAction" id="debugDrawFaces" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Draw 3 Face Cards</button>
+      <button class="debugAction" id="debugRefreshBalance" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Refresh Balance (£100)</button>
+      <button class="debugAction" id="debugShowNotification" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Show Test Notification</button>
+      <button class="debugAction" id="debugSetHealth" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer; display:none;">Set Monster Health to 100</button>
+    </div>
+  </div>
   <section id="monsterArea" aria-label="Monster area" style="position: relative;">
-  <div id="assistNotifications" style="position: fixed; left: 0; top: 120px; min-width: 120px; max-width: 220px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; align-items: flex-start;"></div>
+  <!-- ...existing code... -->
     <!-- ...existing code... -->
   </section>
   <!-- Help/Rules Modal moved outside game area for stacking -->
@@ -575,9 +607,11 @@
       // No automatic showing of How to Play menu
     </script>
         <div id="monsterSpriteWrap" style="position: relative; width: 100%; height: 50%;">
-          <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" style="position: absolute; top: 0; left: 50%; transform: translateX(-50%) scaleY(0.85); transform-origin: top center; max-width: 100%; height: 100%; object-fit: contain;" />
+          <img id="monsterSprite" src="assets/ice_monster.png" alt="Ice Monster" style="position: absolute; top: 0; left: 50%; transform: translateX(-50%) scaleY(0.85); transform-origin: top center; max-width: 100%; height: 100%; object-fit: contain; z-index: 10;" />
         </div>
-        <!-- Defeat Banner -->
+        </div>
+  <div id="assistNotifications" style="position: absolute; left: 0; top: 120px; min-width: 120px; max-width: 220px; z-index: 10001; display: flex; flex-direction: column; gap: 10px; pointer-events: none; align-items: flex-start; margin-left: 0 !important;"></div>
+  <!-- Defeat Banner -->
         <div id="defeatBanner" style="display:none; position:absolute; inset:0; display:none; align-items:center; justify-content:center;">
           <div style="background:rgba(2,6,23,0.85); color:#fde68a; border:1px solid rgba(148,163,184,0.35); border-radius:12px; padding:10px 16px; font-weight:800; letter-spacing:0.5px;">
             Monster Defeated
@@ -591,14 +625,23 @@
             <rect x="17" y="5" width="3" height="13" />
           </svg>
         </button>
-        <button id="debugBtn" class="cornerBtn" aria-label="Debug" title="Debug" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M8 3v4M16 3v4" />
-            <path d="M4 11h16" />
-            <path d="M4 19h16" />
-            <path d="M7 11v8m10-8v8" />
-          </svg>
-        </button>
+  <div id="debugDropdownWrap">
+          <button id="debugBtn" class="cornerBtn" aria-label="Debug" title="Debug" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 3v4M16 3v4" />
+              <path d="M4 11h16" />
+              <path d="M4 19h16" />
+              <path d="M7 11v8m10-8v8" />
+            </svg>
+          </button>
+          <div id="debugDropdown" style="display:none; position:absolute; left:0; top:110%; background:#222; border-radius:8px; box-shadow:0 4px 16px #0008; min-width:180px; z-index:99999; padding:8px 0;">
+            <button class="debugAction" id="debugDrawJokers" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Draw 3 Jokers</button>
+            <button class="debugAction" id="debugDrawFaces" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Draw 3 Face Cards</button>
+            <button class="debugAction" id="debugRefreshBalance" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Refresh Balance (£100)</button>
+            <button class="debugAction" id="debugShowNotification" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer;">Show Test Notification</button>
+            <button class="debugAction" id="debugSetHealth" style="width:100%; background:none; color:#fff; border:none; text-align:left; padding:8px 18px; font-size:1rem; cursor:pointer; display:none;">Set Monster Health to 100</button>
+          </div>
+        </div>
       </section>
       <!-- Character band -->
       <section id="characterArea" aria-label="Character area">
@@ -869,7 +912,10 @@
             // Owner-only debug button toggle
             try {
               ownerId = msg.ownerId || null;
-              if (debugBtn) debugBtn.style.display = (selfId && ownerId && String(ownerId) === String(selfId)) ? 'block' : 'none';
+              if (debugBtn) debugBtn.style.display = 'block';
+              // Show/hide owner-only debug action
+              const debugSetHealth = document.getElementById('debugSetHealth');
+              if (debugSetHealth) debugSetHealth.style.display = (selfId && ownerId && String(ownerId) === String(selfId)) ? 'block' : 'none';
               // Show Start Game button only for lobby owner
               const startGameBtn = document.getElementById('startGameBtn');
               if (startGameBtn) {
@@ -908,9 +954,11 @@
               } catch {}
             }
           } else if (msg.type === 'healPlayer') {
-            const { id, amount } = msg; if (!id) return;
-            applyHealToPlayer(id, Number(amount)||0);
-            spawnHeartRingForPlayer(id);
+            const { id, amount, byName } = msg; if (!id) return;
+            if (id === (selfId || 'self')) {
+              applyHealToPlayer(id, Number(amount)||0, byName);
+              spawnHeartRingForPlayer(id);
+            }
           } else if (msg.type === 'jokerAttack') {
             const dmg = Math.max(1, Number(msg.damage)||1);
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
@@ -954,6 +1002,10 @@
                     const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
                     const anim = p.animate(keyframes, { duration, easing, fill: 'forwards' });
                     anim.finished.catch(()=>{}).finally(()=>{ p.remove(); });
+                  }
+                  // Show red notification if this is the local player
+                  if (id === (selfId || 'self') && typeof currentMonster === 'object' && currentMonster && currentMonster.name) {
+                    showAssistNotification(`${currentMonster.name} attacked you for ${dmg} damage!`, true);
                   }
                 }
               }
@@ -1018,7 +1070,18 @@
           } else if (msg.type === 'heartHeal') {
             const healAmt = Math.max(0, Number(msg.amount)||0);
             const targets = Array.isArray(msg.targets) ? msg.targets : [];
-            for (const id of targets) { applyHealToPlayer(id, healAmt); spawnHeartRingForPlayer(id); }
+            const byName = msg.byName || '';
+            for (const id of targets) {
+              // Only show notification if the sender is not the receiver
+              if (id === (selfId || 'self') && byName && byName !== selfName) {
+                applyHealToPlayer(id, healAmt, byName);
+                spawnHeartRingForPlayer(id);
+              } else if (id === (selfId || 'self') && (!byName || byName === selfName)) {
+                // Apply heal silently (no notification)
+                applyHealToPlayer(id, healAmt);
+                spawnHeartRingForPlayer(id);
+              }
+            }
           } else if (msg.type === 'setMonsterHealth') {
             const h = Number(msg.health);
             if (Number.isFinite(h)) {
@@ -1195,20 +1258,25 @@
         if (!entry) return;
         entry.hp = Math.min(50, (entry.hp || 0) + Math.max(0, amount||0));
         updateHpBadgeFor(id);
-        // Show assist notification if this is us and fromName is provided
-        if ((id === (selfId || 'self')) && fromName) {
+        // Show assist notification if this is us and fromName is a non-empty string and not our own name (i.e., only for networked heals from others)
+        if ((id === (selfId || 'self')) && typeof fromName === 'string' && fromName.trim().length > 0 && fromName !== selfName) {
           showAssistNotification(`${fromName} healed you for ${amount}`);
         }
       }
 
       // Show a notification to the left of the monster
-      function showAssistNotification(text) {
-        const wrap = document.getElementById('assistNotifications');
-        if (!wrap) return;
-        const note = document.createElement('div');
+      function showAssistNotification(text, isRed) {
+  const wrap = document.getElementById('assistNotifications');
+  if (!wrap) return;
+  const note = document.createElement('div');
   note.textContent = text;
-  note.style.background = 'linear-gradient(90deg, rgba(34,197,94,0.95) 0%, rgba(34,197,94,0.0) 100%)';
-  note.style.color = '#fff';
+  if (isRed) {
+    note.style.background = 'linear-gradient(90deg, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.0) 100%)';
+    note.style.color = '#fff';
+  } else {
+    note.style.background = 'linear-gradient(90deg, rgba(34,197,94,0.95) 0%, rgba(34,197,94,0.0) 100%)';
+    note.style.color = '#fff';
+  }
   note.style.fontWeight = '700';
   note.style.fontSize = '0.6rem';
   note.style.borderRadius = '0 12px 12px 0';
@@ -1218,10 +1286,51 @@
   note.style.transform = 'translateY(10px)';
   note.style.transition = 'opacity 0.22s, transform 0.22s';
   note.style.marginLeft = '0';
+  note.style.marginRight = '0';
+  note.style.position = 'relative';
+  note.style.left = '0';
+  note.style.top = '0';
+  note.style.right = 'auto';
+  note.style.width = 'auto';
+  note.style.maxWidth = '220px';
+  note.style.minWidth = '120px';
+  note.style.boxSizing = 'border-box';
   note.style.textShadow = '0 1px 2px rgba(0,0,0,0.12)';
   note.style.pointerEvents = 'none';
+  // Remove alignSelf and relative position to avoid flex/gap issues
+  note.style.alignSelf = '';
+  // Do not change wrap display, keep as flex column for stacking
+  wrap.style.gap = '10px';
+  wrap.style.paddingLeft = '0';
+  wrap.style.marginLeft = '0';
   wrap.appendChild(note);
-        // Animate in
+  // Ensure parent has no gap or padding on left
+  wrap.style.gap = '0';
+  wrap.style.paddingLeft = '0';
+  wrap.style.marginLeft = '0';
+  // Animate in
+// Wire up debug test notification after DOMContentLoaded
+window.addEventListener('DOMContentLoaded', () => {
+  const debugShowNotification = document.getElementById('debugShowNotification');
+  if (debugShowNotification) {
+    debugShowNotification.addEventListener('click', ()=>{
+      const debugDropdown = document.getElementById('debugDropdown');
+      if (debugDropdown) debugDropdown.style.display = 'none';
+      showAssistNotification('Test notification: This should be flush left!');
+    });
+  }
+});
+      // Dynamically align debug button below stats button
+      window.addEventListener('DOMContentLoaded', () => {
+        const statsBtn = document.getElementById('statsBtn');
+        const debugDropdownWrap = document.getElementById('debugDropdownWrap');
+        if (statsBtn && debugDropdownWrap) {
+          // Place debug button directly below stats button, with 10px gap and same left alignment
+          debugDropdownWrap.style.top = (statsBtn.offsetTop + statsBtn.offsetHeight + 10) + 'px';
+          debugDropdownWrap.style.left = statsBtn.offsetLeft + 'px';
+          debugDropdownWrap.style.right = '';
+        }
+      });
         setTimeout(() => {
           note.style.opacity = '1';
           note.style.transform = 'translateY(0)';
@@ -1404,17 +1513,76 @@
           closeStats?.addEventListener('click', ()=>{ if (statsModal) statsModal.style.display = 'none'; });
           // Click outside to close
           statsModal?.addEventListener('click', (e)=>{ if (e.target === statsModal) statsModal.style.display = 'none'; });
-          // Owner-only debug action: set monster health to 100
-          debugBtn?.addEventListener('click', ()=>{
+
+          // Debug dropdown logic
+          const debugDropdown = document.getElementById('debugDropdown');
+          const debugDropdownWrap = document.getElementById('debugDropdownWrap');
+          const debugDrawJokers = document.getElementById('debugDrawJokers');
+          const debugDrawFaces = document.getElementById('debugDrawFaces');
+          const debugRefreshBalance = document.getElementById('debugRefreshBalance');
+          const debugSetHealth = document.getElementById('debugSetHealth');
+
+          // Show/hide dropdown on debugBtn click
+          debugBtn?.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            if (debugDropdown.style.display === 'block') {
+              debugDropdown.style.display = 'none';
+            } else {
+              debugDropdown.style.display = 'block';
+            }
+          });
+          // Hide dropdown on outside click
+          document.addEventListener('click', (e)=>{
+            if (!debugDropdownWrap.contains(e.target)) debugDropdown.style.display = 'none';
+          });
+
+          // Draw 3 Jokers and play them
+          debugDrawJokers?.addEventListener('click', ()=>{
+            debugDropdown.style.display = 'none';
+            if (cardsEl) {
+              cardsEl.innerHTML = '';
+              const newCards = [];
+              for (let i = 0; i < 3; i++) {
+                const el = renderCard({ r: 'Joker', s: 'JOKER' });
+                cardsEl.appendChild(el);
+                newCards.push(el);
+              }
+              const thisRun = ++runToken;
+              useCardsSequentially(newCards, thisRun).then(() => { finalizePrize && finalizePrize(); });
+            }
+          });
+          // Draw 3 random face cards and play them
+          debugDrawFaces?.addEventListener('click', ()=>{
+            debugDropdown.style.display = 'none';
+            if (cardsEl) {
+              cardsEl.innerHTML = '';
+              const faces = ['J','Q','K'];
+              const suits = ['spade','heart','diamond','club'];
+              const newCards = [];
+              for (let i = 0; i < 3; i++) {
+                const r = faces[Math.floor(Math.random()*faces.length)];
+                const s = suits[Math.floor(Math.random()*suits.length)];
+                let cardObj = { r, s: s==='spade'?'♠':s==='heart'?'♥':s==='diamond'?'♦':'♣' };
+                const el = renderCard(cardObj);
+                cardsEl.appendChild(el);
+                newCards.push(el);
+              }
+              const thisRun = ++runToken;
+              useCardsSequentially(newCards, thisRun).then(() => { finalizePrize && finalizePrize(); });
+            }
+          });
+          // Refresh balance to £100
+          debugRefreshBalance?.addEventListener('click', ()=>{
+            debugDropdown.style.display = 'none';
+            balance = 100;
+            if (balanceEl) balanceEl.textContent = `£${balance}`;
+          });
+          // Owner-only: Set monster health to 100
+          debugSetHealth?.addEventListener('click', ()=>{
+            debugDropdown.style.display = 'none';
             if (!(selfId && ownerId && String(selfId) === String(ownerId))) return;
             if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'debugSetHealth', health: 100 })); } catch {} }
             else { progress = Math.min(goal, 100); const pct = goal>0 ? progress/goal : 0; progressFill.style.width = `${pct*100}%`; progressLabel.textContent = `${progress} / ${goal}`; }
-          });
-          // Alt-click triggers a jackpot award broadcast for testing
-          debugBtn?.addEventListener('click', (e)=>{
-            if (!e.altKey) return;
-            if (!(selfId && ownerId && String(selfId) === String(ownerId))) return;
-            if (wsConnected && ws) { try { ws.send(JSON.stringify({ type: 'debugAwardJackpot' })); } catch {} }
           });
         } catch {}
         // Jackpot modal wiring
@@ -1897,8 +2065,13 @@
         const upPx = window.matchMedia('(max-width: 767px)').matches ? 60 : 30;
         try {
           const suit = el.dataset.suit || 'spade';
-          // Avoid double particles for host: only spawn local particles if action isn't broadcasted from self
-          if (suit !== 'joker') {
+          if (suit === 'joker') {
+            // Joker triggers monster attack on players
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'jokerAttackRequest' })); } catch {}
+            }
+          } else {
+            // Avoid double particles for host: only spawn local particles if action isn't broadcasted from self
             const actingId = selfId || 'self';
             // When we send to server, we'll receive a broadcast including our own 'by' id.
             // Here we limit local spawn; remote effects will render via WS handlers.
@@ -2059,6 +2232,13 @@
           amountApplied = dmg;
           label = 'Damage';
           statSpades++; statDamage += dmg; updateStatsCounters();
+          // Play slash-attack overlay for face card crits
+          if (isFace) {
+            if (typeof playSlashAttackOverlay === 'function') playSlashAttackOverlay();
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'slashAttackOverlay' })); } catch {}
+            }
+          }
           if (wsConnected && ws) {
             try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg, suit: 'spade' })); } catch {}
           } else {
@@ -2104,28 +2284,20 @@
             // Do NOT show notification for self-earned prize
           }
           if (othersPrize > 0 && othersCount > 0) {
-            // Pick random other players
+            // Pick random other players (never include self)
             let ids = Array.from(lobbyPlayers.keys()).filter(id => id !== (selfId || 'self'));
-            if (ids.length === 0) ids = [selfId || 'self'];
-            for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
-            const targets = ids.slice(0, Math.min(othersCount, ids.length));
-            // Send sharePrize event to server for networked players
-            if (wsConnected && ws && targets.length > 0) {
-              try {
-                // Send both id and name for each target
-                const to = targets.map(id => ({ id, name: (lobbyPlayers.get(id)?.name || id) }));
-                ws.send(JSON.stringify({ type: 'sharePrize', amount: othersPrize, to }));
-              } catch {}
-            }
-            // If this is us (single player/offline), apply prize locally
-            for (const id of targets) {
-              if (id === (selfId || 'self')) {
-                prize = Number((prize + othersPrize).toFixed(2));
-                prizeEl.textContent = formatCurrency(prize);
-                statDiamonds++; statPrizes = Number((statPrizes + othersPrize).toFixed(2)); updateStatsCounters();
-                showAssistNotification(`You received a shared prize of ${formatCurrency(othersPrize)}!`);
-                spawnCardParticlesFromPlayer('diamond');
+            if (ids.length > 0) {
+              for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+              const targets = ids.slice(0, Math.min(othersCount, ids.length));
+              // Send sharePrize event to server for networked players
+              if (wsConnected && ws && targets.length > 0) {
+                try {
+                  // Send both id and name for each target
+                  const to = targets.map(id => ({ id, name: (lobbyPlayers.get(id)?.name || id) }));
+                  ws.send(JSON.stringify({ type: 'sharePrize', amount: othersPrize, to }));
+                } catch {}
               }
+              // Never show shared notification for self
             }
           }
           if (sharedPrize > 0) {
@@ -2170,16 +2342,21 @@
               spawnHeartRingForPlayer(selfId || 'self');
             }
           }
-          // Apply others heal (random subset)
+          // Apply others heal (random subset, never include self)
           if (othersHeal > 0 && othersCount > 0) {
-            if (wsConnected && ws) {
-              try { ws.send(JSON.stringify({ type: 'heartHealRequest', amount: othersHeal, count: othersCount })); } catch {}
-            } else {
-              let ids = Array.from(lobbyPlayers.keys());
-              if (ids.length === 0) ids = [selfId || 'self'];
+            let ids = Array.from(lobbyPlayers.keys()).filter(id => id !== (selfId || 'self'));
+            if (ids.length > 0) {
               for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
               const targets = ids.slice(0, Math.min(othersCount, ids.length));
-              for (const id of targets) { applyHealToPlayer(id, othersHeal); spawnHeartRingForPlayer(id); }
+              if (wsConnected && ws) {
+                try { ws.send(JSON.stringify({ type: 'heartHealRequest', amount: othersHeal, count: targets.length, to: targets })); } catch {}
+              } else {
+                for (const id of targets) {
+                  applyHealToPlayer(id, othersHeal);
+                  spawnHeartRingForPlayer(id);
+                }
+              }
+              // Never show shared notification for self
             }
           }
           label = 'Heal';
@@ -2190,6 +2367,13 @@
           amountApplied = dmg;
           label = 'Damage';
           statClubs++; statDamage += dmg; updateStatsCounters();
+          // Play slash-attack overlay for face card crits
+          if (isFace) {
+            if (typeof playSlashAttackOverlay === 'function') playSlashAttackOverlay();
+            if (wsConnected && ws) {
+              try { ws.send(JSON.stringify({ type: 'slashAttackOverlay' })); } catch {}
+            }
+          }
           if (wsConnected && ws) {
             try { ws.send(JSON.stringify({ type: 'damageMonster', amount: dmg, suit: 'club' })); } catch {}
           } else {
@@ -2198,6 +2382,17 @@
           }
           if (progress <= 0) { showDefeatSequence(); }
         }
+// Listen for slash-attack overlay events from network
+if (typeof ws !== 'undefined' && ws) {
+  ws.addEventListener('message', function(e) {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg && msg.type === 'slashAttackOverlay') {
+        if (typeof playSlashAttackOverlay === 'function') playSlashAttackOverlay();
+      }
+    } catch {}
+  });
+}
         const pct = progress / goal;
         progressFill.style.width = `${pct * 100}%`;
         progressLabel.textContent = `${progress} / ${goal}`;
