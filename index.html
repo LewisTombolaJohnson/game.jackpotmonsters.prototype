@@ -497,6 +497,27 @@ window.addEventListener('DOMContentLoaded', () => {
         <button id="createLobbyBtn" class="btn btn-danger btn-wide">Create Lobby</button>
       </div>
     </section>
+    <script>
+    // Utility to show only one overlay at a time
+    function showOverlay(overlayId) {
+      const overlays = document.querySelectorAll('.overlay');
+      overlays.forEach(ov => {
+        if (ov.id === overlayId) {
+          ov.style.display = 'grid';
+          ov.style.pointerEvents = 'auto';
+        } else {
+          ov.style.display = 'none';
+          ov.style.pointerEvents = 'none';
+        }
+      });
+    }
+    // Example: showOverlay('mainMenu'); // Only main menu visible
+    // Call showOverlay('lobbyScreen') etc. as needed in your game flow
+    // Optionally, show main menu on load
+    window.addEventListener('DOMContentLoaded', () => {
+      showOverlay('mainMenu');
+    });
+    </script>
 
     <!-- Lobby Screen -->
     <section id="lobbyScreen" aria-label="Lobby" class="overlay" style="display:none;">
@@ -889,13 +910,13 @@ window.addEventListener('DOMContentLoaded', () => {
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
             location.hash = '#' + code;
             renderLobby(code);
-            showLobby();
+            showOverlay('lobbyScreen');
           } else if (msg.type === 'joined') {
             const code = msg.code; if (!code) return;
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
             location.hash = '#' + code;
             renderLobby(code);
-            showLobby();
+            showOverlay('lobbyScreen');
           } else if (msg.type === 'roster') {
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
             const code = msg.code || (location.hash||'').replace('#','');
@@ -1395,8 +1416,8 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
       }
-      function showMenu(){ mainMenuEl.style.display='grid'; lobbyEl.style.display='none'; document.getElementById('game').style.visibility='hidden'; }
-      function showLobby(){ mainMenuEl.style.display='none'; lobbyEl.style.display='grid'; document.getElementById('game').style.visibility='hidden'; }
+      function showMenu(){ showOverlay('mainMenu'); document.getElementById('game').style.visibility='hidden'; }
+      function showLobby(){ showOverlay('lobbyScreen'); document.getElementById('game').style.visibility='hidden'; }
       function showGame(){ mainMenuEl.style.display='none'; lobbyEl.style.display='none'; document.getElementById('game').style.visibility='visible'; }
 
       // Basic identity on this device
