@@ -83,7 +83,9 @@ wss.on('connection', (ws) => {
       client.code = code;
       client.name = msg.name || `Player-${shortId(client.id)}`;
       addPlayer(ws, client);
-      ws.send(JSON.stringify({ type: 'joined', code, you: { id: client.id, name: client.name } }));
+  // Build player roster for the joiner
+  const players = Array.from(lobby.players.values()).map(p => ({ id: p.id, name: p.name, x: p.x, hp: p.hp }));
+  ws.send(JSON.stringify({ type: 'joined', code, you: { id: client.id, name: client.name }, players }));
       // Send current jackpot state to the joiner
       sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
       sendRoster(code);

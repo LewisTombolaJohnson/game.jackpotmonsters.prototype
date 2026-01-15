@@ -956,8 +956,10 @@ window.addEventListener('DOMContentLoaded', () => {
             const code = msg.code; if (!code) return;
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
             location.hash = '#' + code;
-            // Only show lobby if code matches an existing lobby (roster will be sent by server)
-            // Wait for roster message to update player list
+            // If the server includes a player list, render it immediately; otherwise, wait for the roster message
+            if (Array.isArray(msg.players) && msg.players.length > 0) {
+              renderLobby(code, msg.players);
+            }
             showOverlay('lobbyScreen');
           } else if (msg.type === 'roster') {
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
