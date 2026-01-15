@@ -74,14 +74,18 @@ wss.on('connection', (ws) => {
       console.log('[WS] Received join:', { code: msg.code, name: msg.name, clientId: client.id });
       const code = String(msg.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
       if (!code) return;
-      ensureLobby(code);
+      // Only allow joining if lobby already exists
+      const lobby = lobbies.get(code);
+      if (!lobby) {
+        sendTo(ws, 'error', { message: 'Lobby not found. Please check the code and try again.' });
+        return;
+      }
       client.code = code;
       client.name = msg.name || `Player-${shortId(client.id)}`;
       addPlayer(ws, client);
       ws.send(JSON.stringify({ type: 'joined', code, you: { id: client.id, name: client.name } }));
       // Send current jackpot state to the joiner
-      const lobby = lobbies.get(code);
-      if (lobby) sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
+      sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
       sendRoster(code);
     } else if (type === 'leave') {
       removePlayer(ws);

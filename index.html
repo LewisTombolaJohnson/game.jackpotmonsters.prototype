@@ -922,6 +922,11 @@ window.addEventListener('DOMContentLoaded', () => {
         ws.addEventListener('message', (ev)=>{
           console.log('[WS] Message received:', ev.data);
           let msg = {}; try { msg = JSON.parse(ev.data); } catch { return; }
+          if (msg.type === 'error' && msg.message) {
+            alert(msg.message);
+            showOverlay('mainMenu');
+            return;
+          }
           if (msg.type === 'created') {
             const code = msg.code;
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
