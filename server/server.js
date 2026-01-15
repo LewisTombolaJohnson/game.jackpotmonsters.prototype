@@ -51,12 +51,13 @@ wss.on('connection', (ws) => {
     let msg = {};
     try { msg = JSON.parse(String(data)); } catch { return; }
     const { type } = msg;
-    if (type === 'slashAttackOverlay') {
+  if (type === 'slashAttackOverlay') {
       const code = client.code; if (!code) return;
       broadcast(code, 'slashAttackOverlay', { code });
       return;
     }
     if (type === 'create') {
+      console.log('[WS] Received create:', { name: msg.name, clientId: client.id });
       const code = nano();
       ensureLobby(code);
       client.code = code;
@@ -70,6 +71,7 @@ wss.on('connection', (ws) => {
       if (lobby) sendTo(ws, 'jackpotState', { code, jackpot: lobby.jackpot });
       sendRoster(code);
     } else if (type === 'join') {
+      console.log('[WS] Received join:', { code: msg.code, name: msg.name, clientId: client.id });
       const code = String(msg.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
       if (!code) return;
       ensureLobby(code);

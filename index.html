@@ -1,16 +1,16 @@
 <script>
 // DEBUG: Log and highlight the topmost element at the pointer position on click/tap
-window.addEventListener('click', function(e) {
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  if (el) {
-    console.log('Clicked element:', el, 'id:', el.id, 'class:', el.className);
-    // Add a red outline for 1s
-    el.style.outline = '3px solid red';
-    setTimeout(() => { el.style.outline = ''; }, 1000);
-  } else {
-    console.log('No element found at click position');
-  }
-}, true);
+// window.addEventListener('click', function(e) {
+//   const el = document.elementFromPoint(e.clientX, e.clientY);
+//   if (el) {
+//     console.log('Clicked element:', el, 'id:', el.id, 'class:', el.className);
+//     // Add a red outline for 1s
+//     el.style.outline = '3px solid red';
+//     setTimeout(() => { el.style.outline = ''; }, 1000);
+//   } else {
+//     console.log('No element found at click position');
+//   }
+// }, true);
 window.addEventListener('DOMContentLoaded', () => {
   const debugShowNotification = document.getElementById('debugShowNotification');
   if (debugShowNotification) {
@@ -514,13 +514,14 @@ window.addEventListener('DOMContentLoaded', () => {
     function showOverlay(overlayId) {
       const overlays = document.querySelectorAll('.overlay');
       overlays.forEach(ov => {
-        if (ov.id === overlayId) {
-          ov.style.display = 'grid';
-          ov.style.pointerEvents = 'auto';
-        } else {
-          ov.style.display = 'none';
-          ov.style.pointerEvents = 'none';
-        }
+          if (ov.id === overlayId) {
+            console.log('[showOverlay] Showing overlay:', ov.id);
+            ov.style.display = 'grid';
+            ov.style.pointerEvents = 'auto';
+          } else {
+            ov.style.display = 'none';
+            ov.style.pointerEvents = 'none';
+          }
       });
       // Extra guard: hide any modal, backdrop, notification, or debug not inside the active overlay
       const activeOverlay = document.getElementById(overlayId);
@@ -919,8 +920,18 @@ window.addEventListener('DOMContentLoaded', () => {
         ws.addEventListener('close', ()=>{ wsConnected = false; console.log('WS closed'); });
         ws.addEventListener('error', ()=>{ wsConnected = false; console.log('WS error'); });
         ws.addEventListener('message', (ev)=>{
+          console.log('[WS] Message received:', ev.data);
           let msg = {}; try { msg = JSON.parse(ev.data); } catch { return; }
           if (msg.type === 'created') {
+            const code = msg.code;
+            if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
+            location.hash = '#' + code;
+            // Populate player list with just ourselves for now
+            renderLobby(code, [{ id: selfId, name: selfName }]);
+            // Show Start Game button if we're the owner (creator)
+            const startGameBtn = document.getElementById('startGameBtn');
+            if (startGameBtn) startGameBtn.style.display = 'block';
+            showOverlay('lobbyScreen');
           } else if (msg.type === 'slashAttackOverlay') {
             if (typeof playSlashAttackOverlay === 'function') playSlashAttackOverlay();
           } else if (msg.type === 'sharedPrize') {
@@ -944,10 +955,13 @@ window.addEventListener('DOMContentLoaded', () => {
             showOverlay('lobbyScreen');
           } else if (msg.type === 'roster') {
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
-            const code = msg.code || (location.hash||'').replace('#','');
-            renderLobby(code, latestRoster);
-            // Apply any provided normalized positions to avatars
-            try {
+          console.log('[WS] Handling roster message. code:', code, 'players:', latestRoster);
+          const code = msg.code || (location.hash||'').replace('#','');
+          renderLobby(code, latestRoster);
+          console.log('[WS] Calling showOverlay("lobbyScreen")');
+          showOverlay('lobbyScreen');
+          // Apply any provided normalized positions to avatars
+          try {
               const area = document.getElementById('characterArea');
               if (area) {
                 const rect = area.getBoundingClientRect();
@@ -1478,9 +1492,12 @@ window.addEventListener('DOMContentLoaded', () => {
       // Wire buttons
       createLobbyBtn?.addEventListener('click', ()=>{
         updateSelfNameFromInput();
+        console.log('[CreateLobbyBtn] Clicked. wsConnected:', wsConnected, 'ws:', ws);
         if (wsConnected && ws) {
+          console.log('[CreateLobbyBtn] Sending create lobby to server');
           ws.send(JSON.stringify({ type: 'create', name: selfName }));
         } else {
+          console.log('[CreateLobbyBtn] Creating local lobby');
           const code = genCode();
           const store = getLobbyStore();
           if (!store[code]) { store[code] = { players: [] }; setLobbyStore(store); }
@@ -1491,10 +1508,13 @@ window.addEventListener('DOMContentLoaded', () => {
         updateSelfNameFromInput();
         const raw = (joinCodeInput?.value||'').toUpperCase().trim();
         const code = raw.replace(/[^A-Z0-9]/g,'').slice(0,8);
-        if (!code) return;
+        console.log('[JoinBtn] Clicked. code:', code, 'wsConnected:', wsConnected, 'ws:', ws);
+        if (!code) { console.log('[JoinBtn] No code entered'); return; }
         if (wsConnected && ws) {
+          console.log('[JoinBtn] Sending join lobby to server');
           ws.send(JSON.stringify({ type: 'join', code, name: selfName }));
         } else {
+          console.log('[JoinBtn] Joining local lobby');
           navigateToLobby(code);
         }
       });
@@ -1503,7 +1523,11 @@ window.addEventListener('DOMContentLoaded', () => {
         else showGame();
       });
       leaveLobbyBtn?.addEventListener('click', ()=>{
-        if (wsConnected && ws) ws.send(JSON.stringify({ type: 'leave' }));
+        console.log('[LeaveLobbyBtn] Clicked. wsConnected:', wsConnected, 'ws:', ws);
+        if (wsConnected && ws) {
+          console.log('[LeaveLobbyBtn] Sending leave lobby to server');
+          ws.send(JSON.stringify({ type: 'leave' }));
+        }
         leaveLobby();
       });
 
