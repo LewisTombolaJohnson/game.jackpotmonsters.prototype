@@ -951,9 +951,8 @@ window.addEventListener('DOMContentLoaded', () => {
             const code = msg.code; if (!code) return;
             if (msg.you) { selfId = msg.you.id; setSelfIdentity(msg.you.name || selfName); }
             location.hash = '#' + code;
-            // Use latestRoster if available, otherwise just self
-            const players = Array.isArray(msg.players) ? msg.players : [{ id: selfId, name: selfName }];
-            renderLobby(code, players);
+            // Only show lobby if code matches an existing lobby (roster will be sent by server)
+            // Wait for roster message to update player list
             showOverlay('lobbyScreen');
           } else if (msg.type === 'roster') {
             latestRoster = Array.isArray(msg.players) ? msg.players : [];
